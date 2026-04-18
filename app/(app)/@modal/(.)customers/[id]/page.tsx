@@ -43,8 +43,8 @@ export default async function CustomerDetailModal({ params, searchParams }: Page
     <DetailDialog
       customer={customer}
       agents={agents}
-      canEdit={user.canEdit}
-      canDelete={user.canDelete}
+      canEdit={user.canManage}
+      canDelete={user.canManage}
       canEditAgent={user.role === "admin"}
       canRevealRrn={user.role === "admin"}
       prevId={context.prevId}

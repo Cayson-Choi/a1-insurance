@@ -38,8 +38,8 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
       <DetailForm
         customer={customer}
         agents={agents}
-        canEdit={user.canEdit}
-        canDelete={user.canDelete}
+        canEdit={user.canManage}
+        canDelete={user.canManage}
         canEditAgent={user.role === "admin"}
         canRevealRrn={user.role === "admin"}
         prevHref={prevHref}

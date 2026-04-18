@@ -23,12 +23,8 @@ export async function updateCustomerAction(
   formData: FormData,
 ): Promise<UpdateResult> {
   const user = await requireUser();
-
-  // 편집 권한 체크 — agent role은 can_edit 가 있어야 함
   const perms = await getPermissions(user.agentId);
-  if (!perms?.canEdit) {
-    return { ok: false, error: "편집 권한이 없습니다. 관리자에게 문의하세요." };
-  }
+  const canFullEdit = !!perms?.canManage;
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = UpdateCustomerSchema.safeParse(raw);
@@ -51,6 +47,7 @@ export async function updateCustomerAction(
 
   const data = parsed.data;
   const agentChange =
+    canFullEdit &&
     user.role === "admin" &&
     data.agentId !== undefined &&
     data.agentId !== existing.agentId;
@@ -62,47 +59,55 @@ export async function updateCustomerAction(
     if (!target) return { ok: false, error: "존재하지 않는 담당자ID 입니다." };
   }
 
-  const patch: Partial<typeof customers.$inferInsert> = {
-    name: data.name,
-    phone1: data.phone1,
-    job: data.job,
-    address: data.address,
-    addressDetail: data.addressDetail,
-    birthDate: data.birthDate,
-    callResult: data.callResult ?? null,
-    dbCompany: data.dbCompany,
-    dbProduct: data.dbProduct,
-    dbPremium: data.dbPremium,
-    subCategory: data.subCategory,
-    dbStartAt: data.dbStartAt,
-    dbEndAt: data.dbEndAt,
-    dbRegisteredAt: data.dbRegisteredAt,
-    reservationAt: data.reservationAt ? new Date(data.reservationAt) : null,
-    memo: data.memo,
-    branch: data.branch,
-    hq: data.hq,
-    team: data.team,
-    updatedAt: new Date(),
-  };
+  // canManage 있으면 모든 필드, 없으면 방문주소·메모·통화결과만 화이트리스트
+  const patch: Partial<typeof customers.$inferInsert> = canFullEdit
+    ? {
+        name: data.name,
+        phone1: data.phone1,
+        job: data.job,
+        address: data.address,
+        addressDetail: data.addressDetail,
+        birthDate: data.birthDate,
+        callResult: data.callResult ?? null,
+        dbCompany: data.dbCompany,
+        dbProduct: data.dbProduct,
+        dbPremium: data.dbPremium,
+        subCategory: data.subCategory,
+        dbStartAt: data.dbStartAt,
+        dbEndAt: data.dbEndAt,
+        dbRegisteredAt: data.dbRegisteredAt,
+        reservationAt: data.reservationAt ? new Date(data.reservationAt) : null,
+        memo: data.memo,
+        branch: data.branch,
+        hq: data.hq,
+        team: data.team,
+        updatedAt: new Date(),
+      }
+    : {
+        addressDetail: data.addressDetail,
+        callResult: data.callResult ?? null,
+        memo: data.memo,
+        updatedAt: new Date(),
+      };
 
-  if (data.rrnFront !== undefined) {
-    patch.rrnFrontHash = data.rrnFront ? hashPII(data.rrnFront) : null;
-  } else if (data.birthDate !== undefined) {
-    // 생년월일이 바뀌면 주민 앞자리 해시도 자동 재계산 (YYMMDD 기반)
-    if (data.birthDate) {
-      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
-      if (m) patch.rrnFrontHash = hashPII(`${m[1].slice(2)}${m[2]}${m[3]}`);
-    } else {
-      patch.rrnFrontHash = null;
+  if (canFullEdit) {
+    if (data.rrnFront !== undefined) {
+      patch.rrnFrontHash = data.rrnFront ? hashPII(data.rrnFront) : null;
+    } else if (data.birthDate !== undefined) {
+      if (data.birthDate) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
+        if (m) patch.rrnFrontHash = hashPII(`${m[1].slice(2)}${m[2]}${m[3]}`);
+      } else {
+        patch.rrnFrontHash = null;
+      }
     }
-  }
-  if (data.rrnBack !== undefined) {
-    patch.rrnBackHash = data.rrnBack ? hashPII(data.rrnBack) : null;
-    patch.rrnBackEnc = data.rrnBack ? encryptPII(data.rrnBack) : null;
-  }
-
-  if (user.role === "admin" && data.agentId !== undefined) {
-    patch.agentId = data.agentId;
+    if (data.rrnBack !== undefined) {
+      patch.rrnBackHash = data.rrnBack ? hashPII(data.rrnBack) : null;
+      patch.rrnBackEnc = data.rrnBack ? encryptPII(data.rrnBack) : null;
+    }
+    if (user.role === "admin" && data.agentId !== undefined) {
+      patch.agentId = data.agentId;
+    }
   }
 
   await db.update(customers).set(patch).where(eq(customers.id, id));
@@ -161,8 +166,8 @@ type DeleteResult = { ok: true } | { ok: false; error: string };
 export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
   const user = await requireUser();
   const perms = await getPermissions(user.agentId);
-  if (!perms?.canDelete) {
-    return { ok: false, error: "삭제 권한이 없습니다. 관리자에게 문의하세요." };
+  if (!perms?.canManage) {
+    return { ok: false, error: "데이터 관리 권한이 없습니다. 관리자에게 문의하세요." };
   }
 
   const existing = await db.query.customers.findFirst({

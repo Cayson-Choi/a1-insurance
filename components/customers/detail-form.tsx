@@ -102,10 +102,6 @@ export function DetailForm({
   }
 
   async function submit(formData: FormData) {
-    if (!canEdit) {
-      toast.error("편집 권한이 없습니다. 관리자에게 문의하세요.");
-      return;
-    }
     setFieldErrors({});
     startTransition(async () => {
       const res = await updateCustomerAction(customer.id, formData);
@@ -300,26 +296,20 @@ export function DetailForm({
               </button>
             </DeleteCustomerDialog>
           ) : null}
-          {canEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              className="bg-brand text-brand-foreground hover:bg-brand-hover"
-              onClick={() => formRef.current?.requestSubmit()}
-              disabled={pending}
-            >
-              {pending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              저장
-            </Button>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-              읽기 전용
-            </span>
-          )}
+          <Button
+            type="button"
+            size="sm"
+            className="bg-brand text-brand-foreground hover:bg-brand-hover"
+            onClick={() => formRef.current?.requestSubmit()}
+            disabled={pending}
+          >
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            저장
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -343,18 +333,42 @@ export function DetailForm({
           action={submit}
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
-          <fieldset disabled={!canEdit} className="contents">
           {/* Left: 기본 정보 */}
           <section className="space-y-4">
             <h2 className="text-sm font-semibold text-muted-foreground border-b pb-2">
               고객 정보
             </h2>
 
-            <ReadOnly
-              label="담당자"
-              value={customer.agentName ?? customer.agentId ?? "미배정"}
-              hint={canEditAgent ? "오른쪽 '담당자 변경' 드롭다운에서 바꾸세요." : undefined}
-            />
+            {canEditAgent ? (
+              <Field label="담당자" error={err("agentId")}>
+                <Select
+                  value={agentId || NONE_AGENT}
+                  onValueChange={(v) => setAgentId(!v || v === NONE_AGENT ? "" : String(v))}
+                >
+                  <SelectTrigger className="h-10 w-full">
+                    <span>
+                      {agentId
+                        ? `${agents.find((a) => a.agentId === agentId)?.name ?? agentId} · ${agentId}`
+                        : "미배정"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_AGENT}>미배정</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.agentId} value={a.agentId}>
+                        {a.name} · {a.agentId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <input type="hidden" name="agentId" value={agentId} />
+              </Field>
+            ) : (
+              <ReadOnly
+                label="담당자"
+                value={customer.agentName ?? customer.agentId ?? "미배정"}
+              />
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               <Field label="지사" error={err("branch")}>
@@ -363,6 +377,7 @@ export function DetailForm({
                   defaultValue={customer.branch ?? ""}
                   className="h-10"
                   placeholder="수유센터"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="본부" error={err("hq")}>
@@ -371,6 +386,7 @@ export function DetailForm({
                   defaultValue={customer.hq ?? ""}
                   className="h-10"
                   placeholder="동의콜파트"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="소속팀" error={err("team")}>
@@ -379,6 +395,7 @@ export function DetailForm({
                   defaultValue={customer.team ?? ""}
                   className="h-10"
                   placeholder="곽영서팀"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -390,6 +407,7 @@ export function DetailForm({
                 autoFocus
                 required
                 className="h-10"
+                disabled={!canEdit}
               />
             </Field>
 
@@ -400,6 +418,7 @@ export function DetailForm({
                   name="birthDate"
                   defaultValue={toDateInput(customer.birthDate)}
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
               <div className="space-y-1.5">
@@ -435,6 +454,7 @@ export function DetailForm({
                   placeholder="예: 901201"
                   className="h-10 font-mono tabular-nums"
                   autoComplete="off"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="주민번호 뒷자리 (7)" error={err("rrnBack")}>
@@ -446,6 +466,7 @@ export function DetailForm({
                   placeholder="예: 1234567"
                   className="h-10 font-mono tabular-nums"
                   autoComplete="off"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -459,6 +480,7 @@ export function DetailForm({
                   placeholder="010-0000-0000"
                   className="h-10 font-mono tabular-nums flex-1"
                   inputMode="tel"
+                  disabled={!canEdit}
                 />
                 <Button
                   type="button"
@@ -496,6 +518,7 @@ export function DetailForm({
                 defaultValue={customer.address ?? ""}
                 placeholder="시/도 구/군 동/읍 …"
                 className="h-10"
+                disabled={!canEdit}
               />
             </Field>
             <Field label="방문주소" error={err("addressDetail")}>
@@ -512,6 +535,7 @@ export function DetailForm({
                 name="job"
                 defaultValue={customer.job ?? ""}
                 className="h-10"
+                disabled={!canEdit}
               />
             </Field>
           </section>
@@ -550,6 +574,7 @@ export function DetailForm({
                 name="dbCompany"
                 defaultValue={customer.dbCompany ?? ""}
                 className="h-10"
+                disabled={!canEdit}
               />
             </Field>
             <Field label="보험상품명" error={err("dbProduct")}>
@@ -557,6 +582,7 @@ export function DetailForm({
                 name="dbProduct"
                 defaultValue={customer.dbProduct ?? ""}
                 className="h-10"
+                disabled={!canEdit}
               />
             </Field>
 
@@ -567,6 +593,7 @@ export function DetailForm({
                   name="dbStartAt"
                   defaultValue={toDateInput(customer.dbStartAt)}
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="예약일시" error={err("reservationAt")}>
@@ -575,6 +602,7 @@ export function DetailForm({
                   name="reservationAt"
                   defaultValue={toDateTimeLocal(customer.reservationAt)}
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -588,6 +616,7 @@ export function DetailForm({
                   inputMode="numeric"
                   placeholder="55000"
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="소분류" error={err("subCategory")}>
@@ -595,6 +624,7 @@ export function DetailForm({
                   name="subCategory"
                   defaultValue={customer.subCategory ?? ""}
                   className="h-10"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
@@ -606,6 +636,7 @@ export function DetailForm({
                   name="dbRegisteredAt"
                   defaultValue={toDateInput(customer.dbRegisteredAt)}
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="DB 만기일" error={err("dbEndAt")}>
@@ -614,35 +645,10 @@ export function DetailForm({
                   name="dbEndAt"
                   defaultValue={toDateInput(customer.dbEndAt)}
                   className="h-10 tabular-nums"
+                  disabled={!canEdit}
                 />
               </Field>
             </div>
-
-            {canEditAgent ? (
-              <Field label="담당자 변경 (관리자)" error={err("agentId")}>
-                <Select
-                  value={agentId || NONE_AGENT}
-                  onValueChange={(v) => setAgentId(!v || v === NONE_AGENT ? "" : String(v))}
-                >
-                  <SelectTrigger className="h-10 w-full">
-                    <span>
-                      {agentId
-                        ? `${agents.find((a) => a.agentId === agentId)?.name ?? agentId} · ${agentId}`
-                        : "미배정"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE_AGENT}>미배정</SelectItem>
-                    {agents.map((a) => (
-                      <SelectItem key={a.agentId} value={a.agentId}>
-                        {a.name} · {a.agentId}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <input type="hidden" name="agentId" value={agentId} />
-              </Field>
-            ) : null}
 
             <Field label="메모" error={err("memo")}>
               <Textarea
@@ -658,7 +664,6 @@ export function DetailForm({
               <div>수정일시 {formatDateTime(customer.updatedAt)}</div>
             </div>
           </section>
-          </fieldset>
         </form>
       </div>
 

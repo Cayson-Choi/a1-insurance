@@ -11,9 +11,7 @@ export type SessionUser = {
 };
 
 export type Permissions = {
-  canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  canManage: boolean;
   canExport: boolean;
 };
 
@@ -41,20 +39,16 @@ export async function getPermissions(agentId: string): Promise<Permissions | nul
     where: eq(users.agentId, agentId),
     columns: {
       role: true,
-      canCreate: true,
-      canEdit: true,
-      canDelete: true,
+      canManage: true,
       canExport: true,
     },
   });
   if (!row) return null;
   if (row.role === "admin") {
-    return { canCreate: true, canEdit: true, canDelete: true, canExport: true };
+    return { canManage: true, canExport: true };
   }
   return {
-    canCreate: row.canCreate,
-    canEdit: row.canEdit,
-    canDelete: row.canDelete,
+    canManage: row.canManage,
     canExport: row.canExport,
   };
 }

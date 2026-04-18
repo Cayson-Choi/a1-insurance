@@ -114,7 +114,6 @@ export function SearchBar({
           id="f-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="홍길동"
           className="h-9"
         />
       </div>
@@ -126,7 +125,6 @@ export function SearchBar({
           id="f-addr"
           value={addr}
           onChange={(e) => setAddr(e.target.value)}
-          placeholder="서울시 종로구"
           className="h-9"
         />
       </div>
@@ -139,7 +137,6 @@ export function SearchBar({
           value={phone}
           onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 13))}
           inputMode="numeric"
-          placeholder="833 · 0107070"
           className="h-9 font-mono tabular-nums"
           autoComplete="off"
         />
@@ -198,7 +195,6 @@ export function SearchBar({
           onChange={(e) => setRrnFront(e.target.value.replace(/\D/g, "").slice(0, 6))}
           inputMode="numeric"
           maxLength={6}
-          placeholder="901201"
           className="h-9 font-mono tabular-nums"
           autoComplete="off"
         />
@@ -213,7 +209,6 @@ export function SearchBar({
           onChange={(e) => setRrnBack(e.target.value.replace(/\D/g, "").slice(0, 7))}
           inputMode="numeric"
           maxLength={7}
-          placeholder="1234567"
           className="h-9 font-mono tabular-nums"
           autoComplete="off"
         />

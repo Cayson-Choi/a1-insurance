@@ -7,9 +7,7 @@ export type UserRow = {
   agentId: string;
   name: string;
   role: "admin" | "agent";
-  canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  canManage: boolean;
   canExport: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
@@ -23,9 +21,7 @@ export async function listAllUsers(): Promise<UserRow[]> {
       agentId: users.agentId,
       name: users.name,
       role: users.role,
-      canCreate: users.canCreate,
-      canEdit: users.canEdit,
-      canDelete: users.canDelete,
+      canManage: users.canManage,
       canExport: users.canExport,
       createdAt: users.createdAt,
       lastLoginAt: users.lastLoginAt,
