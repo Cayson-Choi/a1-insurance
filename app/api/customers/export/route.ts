@@ -1,0 +1,67 @@
+import { NextRequest } from "next/server";
+import { desc, eq, ilike, sql, and, SQL } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { customers, users } from "@/lib/db/schema";
+import { requireAdmin, ForbiddenError } from "@/lib/auth/rbac";
+import { parseFilter } from "@/lib/customers/queries";
+import { hashPII } from "@/lib/crypto/pii";
+import { buildCustomersWorkbook, type ExportRow } from "@/lib/excel/exporter";
+
+export const runtime = "nodejs";
+
+export async function GET(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch (e) {
+    if (e instanceof ForbiddenError) {
+      return new Response(e.message, { status: 403 });
+    }
+    throw e;
+  }
+
+  const sp: Record<string, string> = {};
+  req.nextUrl.searchParams.forEach((v, k) => {
+    if (sp[k] === undefined) sp[k] = v;
+  });
+  const filter = parseFilter(sp);
+
+  const conds: SQL[] = [];
+  if (filter.agentId) conds.push(eq(customers.agentId, filter.agentId));
+  if (filter.name) conds.push(ilike(customers.name, `%${filter.name}%`));
+  if (filter.address) conds.push(ilike(customers.address, `%${filter.address}%`));
+  if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
+  if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
+  if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));
+
+  const rows = await db
+    .select({
+      customer: customers,
+      agentName: users.name,
+    })
+    .from(customers)
+    .leftJoin(users, eq(customers.agentId, users.agentId))
+    .where(conds.length ? and(...conds) : sql`true`)
+    .orderBy(desc(customers.dbRegisteredAt), desc(customers.createdAt));
+
+  const exportRows: ExportRow[] = rows.map((r) => ({
+    ...r.customer,
+    agentName: r.agentName,
+  }));
+
+  const wb = await buildCustomersWorkbook(exportRows);
+  const buffer = await wb.xlsx.writeBuffer();
+
+  const now = new Date();
+  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  const filename = `A-ONE_고객명부_${ts}.xlsx`;
+
+  return new Response(buffer as ArrayBuffer, {
+    status: 200,
+    headers: {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Cache-Control": "no-store",
+    },
+  });
+}

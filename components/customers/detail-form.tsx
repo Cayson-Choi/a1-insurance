@@ -1,0 +1,575 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, ImageDown, Loader2, Save, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { CallResultBadge } from "@/components/customers/call-result-badge";
+import { RrnRevealButton } from "@/components/customers/rrn-reveal-button";
+import { CALL_RESULTS } from "@/lib/excel/column-map";
+import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
+import type { CustomerDetail } from "@/lib/customers/get-detail";
+import { updateCustomerAction } from "@/lib/customers/actions";
+
+const NONE_RESULT = "__none";
+const NONE_AGENT = "__none";
+
+function toDateInput(v: string | Date | null | undefined): string {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+
+function toDateTimeLocal(v: string | Date | null | undefined): string {
+  if (!v) return "";
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.valueOf())) return "";
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}T${hh}:${mi}`;
+}
+
+type Props = {
+  customer: CustomerDetail;
+  agents: Array<{ agentId: string; name: string }>;
+  canEditAgent: boolean;
+  prevHref: string | null;
+  nextHref: string | null;
+  closeHref: string;
+  onClose?: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  onSaved?: (customer: CustomerDetail) => void;
+  variant?: "modal" | "page";
+};
+
+export function DetailForm({
+  customer,
+  agents,
+  canEditAgent,
+  prevHref,
+  nextHref,
+  closeHref,
+  onClose,
+  onPrev,
+  onNext,
+  onSaved,
+  variant = "modal",
+}: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const captureRef = useRef<HTMLDivElement | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [savingImage, setSavingImage] = useState(false);
+  const [callResult, setCallResult] = useState<string>(customer.callResult ?? "");
+  const [agentId, setAgentId] = useState<string>(customer.agentId ?? "");
+
+  function close() {
+    if (onClose) onClose();
+    else router.push(closeHref);
+  }
+
+  function goPrev() {
+    if (onPrev) onPrev();
+    else if (prevHref) router.push(prevHref);
+  }
+  function goNext() {
+    if (onNext) onNext();
+    else if (nextHref) router.push(nextHref);
+  }
+
+  async function submit(formData: FormData) {
+    setFieldErrors({});
+    startTransition(async () => {
+      const res = await updateCustomerAction(customer.id, formData);
+      if (!res.ok) {
+        if (res.fieldErrors) setFieldErrors(res.fieldErrors);
+        toast.error(res.error);
+        return;
+      }
+      toast.success("고객 정보가 저장되었습니다.");
+      if (onSaved) {
+        // 내부 state를 최신 DB 값으로 갱신하고 싶으면 모달 측에서 처리
+        // 별도 refetch 없이 입력값 기반 갱신만 수행
+      }
+      router.refresh();
+    });
+  }
+
+  async function saveImage() {
+    if (!captureRef.current) return;
+    setSavingImage(true);
+    try {
+      if (formRef.current) {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }
+      const htmlToImage = await import("html-to-image");
+      const dataUrl = await htmlToImage.toPng(captureRef.current, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${customer.name}_${ts}.png`;
+      a.click();
+      toast.success("이미지가 저장되었습니다.");
+    } catch (e) {
+      console.error(e);
+      toast.error("이미지 저장에 실패했습니다.");
+    } finally {
+      setSavingImage(false);
+    }
+  }
+
+  // handler refs — 재마운트/재렌더 시에도 최신 함수가 바인딩되도록
+  const closeRef = useRef(close);
+  const goPrevRef = useRef(goPrev);
+  const goNextRef = useRef(goNext);
+  closeRef.current = close;
+  goPrevRef.current = goPrev;
+  goNextRef.current = goNext;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // editable element? (input/textarea) 에서는 기본 동작 유지할지 체크
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        formRef.current?.requestSubmit();
+        return;
+      }
+      // Ctrl+← / Ctrl+→ — 입력창 안이라도 팝업 네비를 우선
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          e.stopPropagation();
+          goPrevRef.current();
+          return;
+        }
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          e.stopPropagation();
+          goNextRef.current();
+          return;
+        }
+      }
+      void isEditable;
+    }
+    // capture 단계 — 입력창 default 동작(단어 단위 커서 이동) 보다 먼저 캐치
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  const err = (key: string) => fieldErrors[key]?.[0];
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col",
+        variant === "modal" ? "max-h-[92dvh]" : "",
+      )}
+    >
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 border-b bg-sidebar/60 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={goPrev}
+            disabled={!prevHref}
+            aria-label="이전 고객"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            이전
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={goNext}
+            disabled={!nextHref}
+            aria-label="다음 고객"
+          >
+            다음
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={saveImage}
+            disabled={savingImage}
+          >
+            {savingImage ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImageDown className="h-4 w-4" />
+            )}
+            이미지 저장
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-brand text-brand-foreground hover:bg-brand-hover"
+            onClick={() => formRef.current?.requestSubmit()}
+            disabled={pending}
+          >
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            저장
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={close}
+            aria-label="닫기"
+          >
+            <X className="h-4 w-4" />
+            닫기
+          </Button>
+        </div>
+      </div>
+
+      {/* Body (captured for image save) */}
+      <div
+        ref={captureRef}
+        className="flex-1 overflow-y-auto bg-background px-5 py-5"
+      >
+        <form
+          ref={formRef}
+          action={submit}
+          className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+        >
+          {/* Left: 기본 정보 */}
+          <section className="space-y-4">
+            <h2 className="text-sm font-semibold text-muted-foreground border-b pb-2">
+              고객 정보
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <ReadOnly label="담당자" value={customer.agentName ?? customer.agentId ?? "미배정"} />
+              <ReadOnly
+                label="소속"
+                value={[customer.branch, customer.hq, customer.team].filter(Boolean).join(" / ")}
+              />
+            </div>
+
+            <Field label="이름" error={err("name")} required>
+              <Input
+                name="name"
+                defaultValue={customer.name}
+                autoFocus
+                required
+                className="h-10"
+              />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <ReadOnly label="생년월일" value={formatDate(customer.birthDate)} />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  주민번호 등록 상태
+                </Label>
+                <div className="flex h-10 items-center gap-1.5 overflow-x-auto rounded-md border bg-muted/30 px-2 text-sm">
+                  <StatusPill ok={!!customer.rrnFrontHash} label={customer.rrnFrontHash ? "앞 등록" : "앞 미등록"} />
+                  <StatusPill ok={!!customer.rrnBackHash} label={customer.rrnBackHash ? "뒤 등록" : "뒤 미등록"} />
+                  {canEditAgent ? (
+                    <div className="ml-auto shrink-0">
+                      <RrnRevealButton
+                        customerId={customer.id}
+                        hasRrn={customer.hasRrnBack}
+                        customerName={customer.name}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  저장값은 암호화·해시되어 보관됩니다. 입력창은 빈 값으로만 표시돼요.
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="주민번호 앞자리 (6)" error={err("rrnFront")}>
+                <Input
+                  name="rrnFront"
+                  defaultValue=""
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="예: 901201"
+                  className="h-10 font-mono tabular-nums"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="주민번호 뒷자리 (7)" error={err("rrnBack")}>
+                <Input
+                  name="rrnBack"
+                  defaultValue=""
+                  inputMode="numeric"
+                  maxLength={7}
+                  placeholder="예: 1234567"
+                  className="h-10 font-mono tabular-nums"
+                  autoComplete="off"
+                />
+              </Field>
+            </div>
+
+            <Field label="연락처" error={err("phone1")}>
+              <Input
+                name="phone1"
+                defaultValue={customer.phone1 ?? ""}
+                placeholder="010-0000-0000"
+                className="h-10 font-mono tabular-nums"
+                inputMode="tel"
+              />
+              <div className="mt-1 text-xs text-muted-foreground">
+                현재 저장: {formatPhone(customer.phone1) || "없음"}
+              </div>
+            </Field>
+
+            <Field label="원주소" error={err("address")}>
+              <Input
+                name="address"
+                defaultValue={customer.address ?? ""}
+                placeholder="시/도 구/군 동/읍 …"
+                className="h-10"
+              />
+            </Field>
+            <Field label="방문주소" error={err("addressDetail")}>
+              <Input
+                name="addressDetail"
+                defaultValue={customer.addressDetail ?? ""}
+                placeholder="상세 주소, 건물명·동·호 등"
+                className="h-10"
+              />
+            </Field>
+
+            <Field label="직업" error={err("job")}>
+              <Input
+                name="job"
+                defaultValue={customer.job ?? ""}
+                className="h-10"
+              />
+            </Field>
+          </section>
+
+          {/* Right: 상품·예약·담당자 */}
+          <section className="space-y-4">
+            <h2 className="text-sm font-semibold text-muted-foreground border-b pb-2">
+              보험 / 상담 정보
+            </h2>
+
+            <Field label="통화결과">
+              <Select
+                value={callResult || NONE_RESULT}
+                onValueChange={(v) => setCallResult(!v || v === NONE_RESULT ? "" : String(v))}
+              >
+                <SelectTrigger className="h-10 w-full">
+                  <span>{callResult || "미분류"}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_RESULT}>미분류</SelectItem>
+                  {CALL_RESULTS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      <span className="flex items-center gap-2">
+                        <CallResultBadge value={r} />
+                        {r}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="callResult" value={callResult} />
+            </Field>
+
+            <Field label="보험사" error={err("dbCompany")}>
+              <Input
+                name="dbCompany"
+                defaultValue={customer.dbCompany ?? ""}
+                className="h-10"
+              />
+            </Field>
+            <Field label="보험상품명" error={err("dbProduct")}>
+              <Input
+                name="dbProduct"
+                defaultValue={customer.dbProduct ?? ""}
+                className="h-10"
+              />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="가입일" error={err("dbStartAt")}>
+                <Input
+                  type="date"
+                  name="dbStartAt"
+                  defaultValue={toDateInput(customer.dbStartAt)}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+              <Field label="예약일시" error={err("reservationAt")}>
+                <Input
+                  type="datetime-local"
+                  name="reservationAt"
+                  defaultValue={toDateTimeLocal(customer.reservationAt)}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <ReadOnly
+                label="DB 보험료"
+                value={customer.dbPremium ? Number(customer.dbPremium).toLocaleString("ko-KR") + "원" : ""}
+              />
+              <ReadOnly label="소분류" value={customer.subCategory ?? ""} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <ReadOnly label="DB 등록일" value={formatDate(customer.dbRegisteredAt)} />
+              <ReadOnly label="DB 만기일" value={formatDate(customer.dbEndAt)} />
+            </div>
+
+            {canEditAgent ? (
+              <Field label="담당자 변경 (관리자)" error={err("agentId")}>
+                <Select
+                  value={agentId || NONE_AGENT}
+                  onValueChange={(v) => setAgentId(!v || v === NONE_AGENT ? "" : String(v))}
+                >
+                  <SelectTrigger className="h-10 w-full">
+                    <span>
+                      {agentId
+                        ? `${agents.find((a) => a.agentId === agentId)?.name ?? agentId} · ${agentId}`
+                        : "미배정"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_AGENT}>미배정</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.agentId} value={a.agentId}>
+                        {a.name} · {a.agentId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <input type="hidden" name="agentId" value={agentId} />
+              </Field>
+            ) : null}
+
+            <Field label="메모" error={err("memo")}>
+              <Textarea
+                name="memo"
+                defaultValue={customer.memo ?? ""}
+                rows={4}
+                placeholder="상담 내용, 특이사항 등을 입력하세요."
+              />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-muted-foreground">
+              <div>등록일시 {formatDateTime(customer.createdAt)}</div>
+              <div>수정일시 {formatDateTime(customer.updatedAt)}</div>
+            </div>
+          </section>
+        </form>
+      </div>
+
+      <div className="border-t bg-sidebar/40 px-4 py-2 text-[11px] text-muted-foreground flex items-center justify-between">
+        <span>단축키: Esc 닫기 · Ctrl+S 저장 · Ctrl+← / Ctrl+→ 이전/다음</span>
+        <span>수정일시 {formatDateTime(customer.updatedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  error,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  error?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-muted-foreground">
+        {label}
+        {required ? <span className="ml-1 text-destructive">*</span> : null}
+      </Label>
+      {children}
+      {error ? <div className="text-xs text-destructive">{error}</div> : null}
+    </div>
+  );
+}
+
+function ReadOnly({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm text-foreground">
+        {value || <span className="text-muted-foreground">—</span>}
+      </div>
+      {hint ? <div className="text-[11px] text-muted-foreground">{hint}</div> : null}
+    </div>
+  );
+}
+
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium",
+        ok
+          ? "bg-brand/15 text-[#b4610e] border-brand/30"
+          : "bg-muted text-muted-foreground border-border",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
