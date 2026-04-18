@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ImageDown, Loader2, Save, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, ImageDown, Loader2, PhoneCall, Save, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,7 @@ export function DetailForm({
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
   const captureRef = useRef<HTMLDivElement | null>(null);
+  const phoneRef = useRef<HTMLInputElement | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [savingImage, setSavingImage] = useState(false);
   const [callResult, setCallResult] = useState<string>(customer.callResult ?? "");
@@ -109,6 +110,40 @@ export function DetailForm({
       }
       router.refresh();
     });
+  }
+
+  function currentPhone(): string {
+    return (phoneRef.current?.value ?? customer.phone1 ?? "").trim();
+  }
+
+  async function copyPhone() {
+    const raw = currentPhone();
+    if (!raw) {
+      toast.error("연락처가 비어있습니다.");
+      return;
+    }
+    const formatted = formatPhone(raw) || raw;
+    try {
+      await navigator.clipboard.writeText(formatted);
+      toast.success(`복사됨: ${formatted}`);
+    } catch {
+      toast.error("클립보드 접근이 차단되어 복사하지 못했습니다.");
+    }
+  }
+
+  function callPhone() {
+    const raw = currentPhone();
+    if (!raw) {
+      toast.error("연락처가 비어있습니다.");
+      return;
+    }
+    const digits = raw.replace(/[^\d+]/g, "");
+    if (!digits) {
+      toast.error("유효한 전화번호가 아닙니다.");
+      return;
+    }
+    // tel: URI → Phone Link (Windows) / FaceTime (Mac) / 기본 전화앱 (Mobile)
+    window.location.href = `tel:${digits}`;
   }
 
   async function saveImage() {
@@ -351,13 +386,40 @@ export function DetailForm({
             </div>
 
             <Field label="연락처" error={err("phone1")}>
-              <Input
-                name="phone1"
-                defaultValue={customer.phone1 ?? ""}
-                placeholder="010-0000-0000"
-                className="h-10 font-mono tabular-nums"
-                inputMode="tel"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={phoneRef}
+                  name="phone1"
+                  defaultValue={customer.phone1 ?? ""}
+                  placeholder="010-0000-0000"
+                  className="h-10 font-mono tabular-nums flex-1"
+                  inputMode="tel"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 shrink-0"
+                  onClick={callPhone}
+                  title="전화 걸기 (Phone Link / 기본 전화앱 실행)"
+                  aria-label="전화 걸기"
+                >
+                  <PhoneCall className="h-4 w-4" />
+                  전화
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 shrink-0"
+                  onClick={copyPhone}
+                  title="전화번호 복사"
+                  aria-label="전화번호 복사"
+                >
+                  <Copy className="h-4 w-4" />
+                  복사
+                </Button>
+              </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 현재 저장: {formatPhone(customer.phone1) || "없음"}
               </div>
