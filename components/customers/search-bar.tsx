@@ -105,8 +105,8 @@ export function SearchBar({
     !!name || !!addr || !!phone || !!callResult || !!agentId || !!rrnFront || !!rrnBack;
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4 shadow-sm">
-      <div className="flex flex-col gap-1.5 w-48">
+    <div className="flex flex-wrap items-end gap-2 md:gap-3 rounded-lg border bg-card p-3 md:p-4 shadow-sm">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-48">
         <Label htmlFor="f-name" className="text-xs text-muted-foreground">
           이름
         </Label>
@@ -117,7 +117,7 @@ export function SearchBar({
           className="h-9"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-64">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-64">
         <Label htmlFor="f-addr" className="text-xs text-muted-foreground">
           주소
         </Label>
@@ -128,7 +128,7 @@ export function SearchBar({
           className="h-9"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-40">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-40">
         <Label htmlFor="f-phone" className="text-xs text-muted-foreground">
           전화번호
         </Label>
@@ -141,7 +141,7 @@ export function SearchBar({
           autoComplete="off"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-36">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
         <Label className="text-xs text-muted-foreground">통화결과</Label>
         <Select
           value={callResult || ALL}
@@ -161,7 +161,7 @@ export function SearchBar({
         </Select>
       </div>
       {showAgentFilter ? (
-        <div className="flex flex-col gap-1.5 w-44">
+        <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-44">
           <Label className="text-xs text-muted-foreground">담당자</Label>
           <Select
             value={agentId || ALL}
@@ -185,7 +185,7 @@ export function SearchBar({
           </Select>
         </div>
       ) : null}
-      <div className="flex flex-col gap-1.5 w-28">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-28">
         <Label htmlFor="f-rrn-front" className="text-xs text-muted-foreground">
           주민 앞 6
         </Label>
@@ -199,7 +199,7 @@ export function SearchBar({
           autoComplete="off"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-32">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-32">
         <Label htmlFor="f-rrn-back" className="text-xs text-muted-foreground">
           주민 뒤 7
         </Label>

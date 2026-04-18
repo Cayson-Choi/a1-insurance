@@ -236,12 +236,12 @@ export function DetailForm({
     <div
       className={cn(
         "flex flex-col",
-        variant === "modal" ? "max-h-[92dvh]" : "",
+        variant === "modal" ? "h-[100dvh] md:h-auto md:max-h-[92dvh]" : "",
       )}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 border-b bg-sidebar/60 px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 border-b bg-sidebar/60 px-3 md:px-4 py-2 md:py-3 overflow-x-auto">
+        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
           <Button
             type="button"
             variant="outline"
@@ -251,7 +251,7 @@ export function DetailForm({
             aria-label="이전 고객"
           >
             <ChevronLeft className="h-4 w-4" />
-            이전
+            <span className="hidden sm:inline">이전</span>
           </Button>
           <Button
             type="button"
@@ -261,24 +261,25 @@ export function DetailForm({
             disabled={!nextHref}
             aria-label="다음 고객"
           >
-            다음
+            <span className="hidden sm:inline">다음</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={saveImage}
             disabled={savingImage}
+            aria-label="이미지 저장"
           >
             {savingImage ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ImageDown className="h-4 w-4" />
             )}
-            이미지 저장
+            <span className="hidden sm:inline">이미지 저장</span>
           </Button>
           {canDelete ? (
             <DeleteCustomerDialog
@@ -288,11 +289,12 @@ export function DetailForm({
             >
               <button
                 type="button"
-                className="inline-flex items-center gap-1 h-9 px-3 rounded-md border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 transition"
+                className="inline-flex items-center gap-1 h-9 px-2 md:px-3 rounded-md border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 transition"
                 title="고객 삭제"
+                aria-label="고객 삭제"
               >
                 <Trash2 className="h-4 w-4" />
-                삭제
+                <span className="hidden sm:inline">삭제</span>
               </button>
             </DeleteCustomerDialog>
           ) : null}
@@ -302,13 +304,14 @@ export function DetailForm({
             className="bg-brand text-brand-foreground hover:bg-brand-hover"
             onClick={() => formRef.current?.requestSubmit()}
             disabled={pending}
+            aria-label="저장"
           >
             {pending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Save className="h-4 w-4" />
             )}
-            저장
+            <span className="hidden sm:inline">저장</span>
           </Button>
           <Button
             type="button"
@@ -318,7 +321,7 @@ export function DetailForm({
             aria-label="닫기"
           >
             <X className="h-4 w-4" />
-            닫기
+            <span className="hidden sm:inline">닫기</span>
           </Button>
         </div>
       </div>
@@ -326,7 +329,7 @@ export function DetailForm({
       {/* Body (captured for image save) */}
       <div
         ref={captureRef}
-        className="flex-1 overflow-y-auto bg-background px-5 py-5"
+        className="flex-1 overflow-y-auto bg-background px-3 md:px-5 py-4 md:py-5"
       >
         <form
           ref={formRef}

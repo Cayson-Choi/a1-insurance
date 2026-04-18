@@ -25,8 +25,8 @@ export function UserTable({
   currentAgentId: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <Table>
+    <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
+      <Table className="min-w-[800px]">
         <TableHeader className="bg-muted/50">
           <TableRow>
             <TableHead className="w-28">담당자ID</TableHead>

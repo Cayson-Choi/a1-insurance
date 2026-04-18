@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { LogOut, Shield, UserRound } from "lucide-react";
+import { LogOut, Menu, Shield, UserRound } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,7 +33,31 @@ export function AppHeader({ user }: { user: SessionUser }) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 md:gap-6 px-3 md:px-6">
+        {/* 모바일 햄버거 메뉴 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="메뉴 열기"
+            className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu className="h-5 w-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" sideOffset={8} className="w-60">
+            <DropdownMenuGroup>
+              {nav.map((n) => (
+                <DropdownMenuItem
+                  key={n.href}
+                  nativeButton={false}
+                  render={<Link href={n.href} />}
+                  className="cursor-pointer text-sm"
+                >
+                  {n.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Link href="/customers" className="shrink-0" aria-label={COMPANY.nameKo}>
           <Logo variant="horizontal" priority />
         </Link>
@@ -56,10 +82,10 @@ export function AppHeader({ user }: { user: SessionUser }) {
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="사용자 메뉴"
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-md text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              className="inline-flex items-center gap-1.5 md:gap-2 h-9 px-2 md:px-3 rounded-md text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
             >
               <UserRound className="h-4 w-4" />
-              <span>{user.name ?? user.agentId}</span>
+              <span className="hidden sm:inline">{user.name ?? user.agentId}</span>
               {isAdmin ? (
                 <Badge className="bg-brand text-brand-foreground hover:bg-brand text-[10px] px-1.5 h-4 gap-0.5">
                   <Shield className="h-2.5 w-2.5" />

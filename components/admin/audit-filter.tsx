@@ -64,9 +64,9 @@ export function AuditFilterBar({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4 shadow-sm"
+      className="flex flex-wrap items-end gap-2 md:gap-3 rounded-lg border bg-card p-3 md:p-4 shadow-sm"
     >
-      <div className="flex flex-col gap-1.5 w-36">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
         <Label className="text-xs text-muted-foreground">액션</Label>
         <Select
           value={action || ALL}
@@ -84,7 +84,7 @@ export function AuditFilterBar({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex flex-col gap-1.5 w-44">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-44">
         <Label className="text-xs text-muted-foreground">작업자</Label>
         <Select
           value={actor || ALL}
@@ -107,7 +107,7 @@ export function AuditFilterBar({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex flex-col gap-1.5 w-36">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
         <Label htmlFor="f-from" className="text-xs text-muted-foreground">
           시작일
         </Label>
@@ -119,7 +119,7 @@ export function AuditFilterBar({
           className="h-9 tabular-nums"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-36">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
         <Label htmlFor="f-to" className="text-xs text-muted-foreground">
           종료일
         </Label>

@@ -80,8 +80,8 @@ export function ListTable({
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-        <Table>
+      <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
+        <Table className="min-w-[900px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
               {canBulkEdit ? (

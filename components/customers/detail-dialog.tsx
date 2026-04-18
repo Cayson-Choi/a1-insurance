@@ -93,7 +93,7 @@ export function DetailDialog({
         />
         <DialogPrimitive.Popup
           aria-label="고객 상세"
-          className="fixed top-1/2 left-1/2 z-50 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
+          className="fixed inset-0 md:inset-auto md:top-1/2 md:left-1/2 z-50 w-full md:max-w-5xl md:-translate-x-1/2 md:-translate-y-1/2 overflow-hidden md:rounded-xl border-0 md:border bg-popover text-popover-foreground shadow-2xl ring-0 md:ring-1 md:ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 md:data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0"
         >
           {/*
             Key by customer.id → 내부 폼(입력창·useState) 깔끔 리셋,
