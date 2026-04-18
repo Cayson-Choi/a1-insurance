@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, auditLogs, users } from "@/lib/db/schema";
-import { requireUser, requireAdmin } from "@/lib/auth/rbac";
+import { requireUser, requireAdmin, getPermissions } from "@/lib/auth/rbac";
 import { UpdateCustomerSchema } from "@/lib/customers/schema";
 import { encryptPII, hashPII, decryptPII } from "@/lib/crypto/pii";
 import {
@@ -24,12 +24,18 @@ export async function updateCustomerAction(
 ): Promise<UpdateResult> {
   const user = await requireUser();
 
+  // 편집 권한 체크 — agent role은 can_edit 가 있어야 함
+  const perms = await getPermissions(user.agentId);
+  if (!perms?.canEdit) {
+    return { ok: false, error: "편집 권한이 없습니다. 관리자에게 문의하세요." };
+  }
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = UpdateCustomerSchema.safeParse(raw);
   if (!parsed.success) {
     const fieldErrors: Record<string, string[]> = {};
     for (const issue of parsed.error.issues) {
-      const key = issue.path.join(".");
+      const key = issue.path.map(String).join(".");
       (fieldErrors[key] ??= []).push(issue.message);
     }
     return { ok: false, error: "입력값을 확인해주세요.", fieldErrors };
@@ -62,17 +68,33 @@ export async function updateCustomerAction(
     job: data.job,
     address: data.address,
     addressDetail: data.addressDetail,
+    birthDate: data.birthDate,
     callResult: data.callResult ?? null,
     dbCompany: data.dbCompany,
     dbProduct: data.dbProduct,
+    dbPremium: data.dbPremium,
+    subCategory: data.subCategory,
     dbStartAt: data.dbStartAt,
+    dbEndAt: data.dbEndAt,
+    dbRegisteredAt: data.dbRegisteredAt,
     reservationAt: data.reservationAt ? new Date(data.reservationAt) : null,
     memo: data.memo,
+    branch: data.branch,
+    hq: data.hq,
+    team: data.team,
     updatedAt: new Date(),
   };
 
   if (data.rrnFront !== undefined) {
     patch.rrnFrontHash = data.rrnFront ? hashPII(data.rrnFront) : null;
+  } else if (data.birthDate !== undefined) {
+    // 생년월일이 바뀌면 주민 앞자리 해시도 자동 재계산 (YYMMDD 기반)
+    if (data.birthDate) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
+      if (m) patch.rrnFrontHash = hashPII(`${m[1].slice(2)}${m[2]}${m[3]}`);
+    } else {
+      patch.rrnFrontHash = null;
+    }
   }
   if (data.rrnBack !== undefined) {
     patch.rrnBackHash = data.rrnBack ? hashPII(data.rrnBack) : null;
@@ -131,6 +153,43 @@ export async function updateCustomerAction(
   revalidatePath("/customers");
   revalidatePath(`/customers/${id}`);
 
+  return { ok: true };
+}
+
+type DeleteResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
+  const user = await requireUser();
+  const perms = await getPermissions(user.agentId);
+  if (!perms?.canDelete) {
+    return { ok: false, error: "삭제 권한이 없습니다. 관리자에게 문의하세요." };
+  }
+
+  const existing = await db.query.customers.findFirst({
+    where: eq(customers.id, id),
+  });
+  if (!existing) return { ok: false, error: "고객을 찾을 수 없습니다." };
+  if (user.role === "agent" && existing.agentId !== user.agentId) {
+    return { ok: false, error: "해당 고객에 대한 권한이 없습니다." };
+  }
+
+  // 감사로그 먼저 기록 (삭제 후 customer_id 참조 가능하도록 CASCADE 없이 남겨둠)
+  await db.insert(auditLogs).values({
+    actorAgentId: user.agentId,
+    customerId: id,
+    action: "edit",
+    before: {
+      deleted: false,
+      name: existing.name,
+      phone1: existing.phone1,
+      agentId: existing.agentId,
+    },
+    after: { deleted: true },
+  });
+
+  await db.delete(customers).where(eq(customers.id, id));
+
+  revalidatePath("/customers");
   return { ok: true };
 }
 

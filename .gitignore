@@ -46,3 +46,7 @@ next-env.d.ts
 
 # drizzle local artifacts
 /drizzle/meta/_journal.json.bak
+
+# Excel lock files
+~$*
+*.tmp

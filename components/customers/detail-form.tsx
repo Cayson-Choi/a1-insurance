@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Copy, ImageDown, Loader2, PhoneCall, Save, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, ImageDown, Loader2, PhoneCall, Save, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { RrnRevealButton } from "@/components/customers/rrn-reveal-button";
+import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { CALL_RESULTS } from "@/lib/excel/column-map";
 import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
 import type { CustomerDetail } from "@/lib/customers/get-detail";
@@ -46,7 +47,10 @@ function toDateTimeLocal(v: string | Date | null | undefined): string {
 type Props = {
   customer: CustomerDetail;
   agents: Array<{ agentId: string; name: string }>;
+  canEdit: boolean;
+  canDelete: boolean;
   canEditAgent: boolean;
+  canRevealRrn: boolean;
   prevHref: string | null;
   nextHref: string | null;
   closeHref: string;
@@ -60,7 +64,10 @@ type Props = {
 export function DetailForm({
   customer,
   agents,
+  canEdit,
+  canDelete,
   canEditAgent,
+  canRevealRrn,
   prevHref,
   nextHref,
   closeHref,
@@ -95,6 +102,10 @@ export function DetailForm({
   }
 
   async function submit(formData: FormData) {
+    if (!canEdit) {
+      toast.error("편집 권한이 없습니다. 관리자에게 문의하세요.");
+      return;
+    }
     setFieldErrors({});
     startTransition(async () => {
       const res = await updateCustomerAction(customer.id, formData);
@@ -106,7 +117,6 @@ export function DetailForm({
       toast.success("고객 정보가 저장되었습니다.");
       if (onSaved) {
         // 내부 state를 최신 DB 값으로 갱신하고 싶으면 모달 측에서 처리
-        // 별도 refetch 없이 입력값 기반 갱신만 수행
       }
       router.refresh();
     });
@@ -274,20 +284,42 @@ export function DetailForm({
             )}
             이미지 저장
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="bg-brand text-brand-foreground hover:bg-brand-hover"
-            onClick={() => formRef.current?.requestSubmit()}
-            disabled={pending}
-          >
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            저장
-          </Button>
+          {canDelete ? (
+            <DeleteCustomerDialog
+              customerId={customer.id}
+              customerName={customer.name}
+              onDeleted={close}
+            >
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-md border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 transition"
+                title="고객 삭제"
+              >
+                <Trash2 className="h-4 w-4" />
+                삭제
+              </button>
+            </DeleteCustomerDialog>
+          ) : null}
+          {canEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              className="bg-brand text-brand-foreground hover:bg-brand-hover"
+              onClick={() => formRef.current?.requestSubmit()}
+              disabled={pending}
+            >
+              {pending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              저장
+            </Button>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+              읽기 전용
+            </span>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -311,18 +343,44 @@ export function DetailForm({
           action={submit}
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
+          <fieldset disabled={!canEdit} className="contents">
           {/* Left: 기본 정보 */}
           <section className="space-y-4">
             <h2 className="text-sm font-semibold text-muted-foreground border-b pb-2">
               고객 정보
             </h2>
 
-            <div className="grid grid-cols-2 gap-3">
-              <ReadOnly label="담당자" value={customer.agentName ?? customer.agentId ?? "미배정"} />
-              <ReadOnly
-                label="소속"
-                value={[customer.branch, customer.hq, customer.team].filter(Boolean).join(" / ")}
-              />
+            <ReadOnly
+              label="담당자"
+              value={customer.agentName ?? customer.agentId ?? "미배정"}
+              hint={canEditAgent ? "오른쪽 '담당자 변경' 드롭다운에서 바꾸세요." : undefined}
+            />
+
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="지사" error={err("branch")}>
+                <Input
+                  name="branch"
+                  defaultValue={customer.branch ?? ""}
+                  className="h-10"
+                  placeholder="수유센터"
+                />
+              </Field>
+              <Field label="본부" error={err("hq")}>
+                <Input
+                  name="hq"
+                  defaultValue={customer.hq ?? ""}
+                  className="h-10"
+                  placeholder="동의콜파트"
+                />
+              </Field>
+              <Field label="소속팀" error={err("team")}>
+                <Input
+                  name="team"
+                  defaultValue={customer.team ?? ""}
+                  className="h-10"
+                  placeholder="곽영서팀"
+                />
+              </Field>
             </div>
 
             <Field label="이름" error={err("name")} required>
@@ -336,7 +394,14 @@ export function DetailForm({
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <ReadOnly label="생년월일" value={formatDate(customer.birthDate)} />
+              <Field label="생년월일" error={err("birthDate")}>
+                <Input
+                  type="date"
+                  name="birthDate"
+                  defaultValue={toDateInput(customer.birthDate)}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">
                   주민번호 등록 상태
@@ -344,7 +409,7 @@ export function DetailForm({
                 <div className="flex h-10 items-center gap-1.5 overflow-x-auto rounded-md border bg-muted/30 px-2 text-sm">
                   <StatusPill ok={!!customer.rrnFrontHash} label={customer.rrnFrontHash ? "앞 등록" : "앞 미등록"} />
                   <StatusPill ok={!!customer.rrnBackHash} label={customer.rrnBackHash ? "뒤 등록" : "뒤 미등록"} />
-                  {canEditAgent ? (
+                  {canRevealRrn ? (
                     <div className="ml-auto shrink-0">
                       <RrnRevealButton
                         customerId={customer.id}
@@ -515,16 +580,42 @@ export function DetailForm({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <ReadOnly
-                label="DB 보험료"
-                value={customer.dbPremium ? Number(customer.dbPremium).toLocaleString("ko-KR") + "원" : ""}
-              />
-              <ReadOnly label="소분류" value={customer.subCategory ?? ""} />
+              <Field label="DB 보험료" error={err("dbPremium")}>
+                <Input
+                  type="text"
+                  name="dbPremium"
+                  defaultValue={customer.dbPremium ?? ""}
+                  inputMode="numeric"
+                  placeholder="55000"
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+              <Field label="소분류" error={err("subCategory")}>
+                <Input
+                  name="subCategory"
+                  defaultValue={customer.subCategory ?? ""}
+                  className="h-10"
+                />
+              </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <ReadOnly label="DB 등록일" value={formatDate(customer.dbRegisteredAt)} />
-              <ReadOnly label="DB 만기일" value={formatDate(customer.dbEndAt)} />
+              <Field label="DB 등록일" error={err("dbRegisteredAt")}>
+                <Input
+                  type="date"
+                  name="dbRegisteredAt"
+                  defaultValue={toDateInput(customer.dbRegisteredAt)}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
+              <Field label="DB 만기일" error={err("dbEndAt")}>
+                <Input
+                  type="date"
+                  name="dbEndAt"
+                  defaultValue={toDateInput(customer.dbEndAt)}
+                  className="h-10 tabular-nums"
+                />
+              </Field>
             </div>
 
             {canEditAgent ? (
@@ -567,6 +658,7 @@ export function DetailForm({
               <div>수정일시 {formatDateTime(customer.updatedAt)}</div>
             </div>
           </section>
+          </fieldset>
         </form>
       </div>
 

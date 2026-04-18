@@ -13,7 +13,10 @@ type Agent = { agentId: string; name: string };
 type Props = {
   customer: CustomerDetail;
   agents: Agent[];
+  canEdit: boolean;
+  canDelete: boolean;
   canEditAgent: boolean;
+  canRevealRrn: boolean;
   prevId: string | null;
   nextId: string | null;
   preservedParams: Record<string, string>;
@@ -23,7 +26,10 @@ type Props = {
 export function DetailDialog({
   customer: initialCustomer,
   agents,
+  canEdit,
+  canDelete,
   canEditAgent,
+  canRevealRrn,
   prevId: initialPrevId,
   nextId: initialNextId,
   preservedParams,
@@ -97,7 +103,10 @@ export function DetailDialog({
             key={customer.id}
             customer={customer}
             agents={agents}
+            canEdit={canEdit}
+            canDelete={canDelete}
             canEditAgent={canEditAgent}
+            canRevealRrn={canRevealRrn}
             prevHref={prevId ? `/customers/${prevId}${qs}` : null}
             nextHref={nextId ? `/customers/${nextId}${qs}` : null}
             closeHref={closeHref}

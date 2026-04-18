@@ -8,6 +8,7 @@ import {
   date,
   numeric,
   jsonb,
+  boolean,
   index,
   uniqueIndex,
   customType,
@@ -46,9 +47,11 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     name: varchar("name", { length: 60 }).notNull(),
     role: roleEnum("role").notNull().default("agent"),
-    branch: varchar("branch", { length: 60 }),
-    hq: varchar("hq", { length: 60 }),
-    team: varchar("team", { length: 60 }),
+    // 담당자별 권한 — agent role만 해당. admin은 항상 모든 권한 보유
+    canCreate: boolean("can_create").notNull().default(false),
+    canEdit: boolean("can_edit").notNull().default(false),
+    canDelete: boolean("can_delete").notNull().default(false),
+    canExport: boolean("can_export").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

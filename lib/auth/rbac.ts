@@ -1,11 +1,23 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 
 export type SessionUser = {
   agentId: string;
   role: "admin" | "agent";
   name?: string | null;
 };
+
+export type Permissions = {
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canExport: boolean;
+};
+
+export type SessionUserWithPerms = SessionUser & Permissions;
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await auth();
@@ -21,6 +33,37 @@ export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   return user;
+}
+
+/** DB에서 최신 권한을 조회. admin은 항상 모두 true. */
+export async function getPermissions(agentId: string): Promise<Permissions | null> {
+  const row = await db.query.users.findFirst({
+    where: eq(users.agentId, agentId),
+    columns: {
+      role: true,
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canExport: true,
+    },
+  });
+  if (!row) return null;
+  if (row.role === "admin") {
+    return { canCreate: true, canEdit: true, canDelete: true, canExport: true };
+  }
+  return {
+    canCreate: row.canCreate,
+    canEdit: row.canEdit,
+    canDelete: row.canDelete,
+    canExport: row.canExport,
+  };
+}
+
+export async function requireUserWithPerms(): Promise<SessionUserWithPerms> {
+  const user = await requireUser();
+  const perms = await getPermissions(user.agentId);
+  if (!perms) redirect("/login");
+  return { ...user, ...perms };
 }
 
 export class ForbiddenError extends Error {

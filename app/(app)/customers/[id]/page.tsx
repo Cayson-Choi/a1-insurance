@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth/rbac";
+import { requireUserWithPerms } from "@/lib/auth/rbac";
 import { getCustomerDetail, getDetailContext } from "@/lib/customers/get-detail";
 import { listAgents } from "@/lib/customers/queries";
 import { preserveQuery } from "@/lib/customers/preserve-query";
@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   const { id } = await params;
   const sp = await searchParams;
 
-  const user = await requireUser();
+  const user = await requireUserWithPerms();
   const [customer, context, agents] = await Promise.all([
     getCustomerDetail(id, user),
     getDetailContext(id, sp, user),
@@ -38,7 +38,10 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
       <DetailForm
         customer={customer}
         agents={agents}
+        canEdit={user.canEdit}
+        canDelete={user.canDelete}
         canEditAgent={user.role === "admin"}
+        canRevealRrn={user.role === "admin"}
         prevHref={prevHref}
         nextHref={nextHref}
         closeHref={closeHref}

@@ -8,6 +8,7 @@ import { Loader2, UserPlus, UserPen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -32,12 +33,20 @@ export function UserFormDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [role, setRole] = useState<"admin" | "agent">(user?.role ?? "agent");
+  const [canCreate, setCanCreate] = useState(user?.canCreate ?? false);
+  const [canEdit, setCanEdit] = useState(user?.canEdit ?? false);
+  const [canDelete, setCanDelete] = useState(user?.canDelete ?? false);
+  const [canExport, setCanExport] = useState(user?.canExport ?? false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("role", role);
+    fd.set("canCreate", String(canCreate));
+    fd.set("canEdit", String(canEdit));
+    fd.set("canDelete", String(canDelete));
+    fd.set("canExport", String(canExport));
     setErrors({});
     startTransition(async () => {
       const res =
@@ -110,6 +119,25 @@ export function UserFormDialog({
                 </Select>
               </Field>
 
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    담당자 권한
+                  </Label>
+                  {role === "admin" ? (
+                    <span className="text-[11px] text-brand-accent">관리자는 모든 권한 자동 부여</span>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">체크 안 된 항목은 제한됨</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <PermCheck label="데이터 입력" disabled={role === "admin"} checked={role === "admin" || canCreate} onChange={setCanCreate} />
+                  <PermCheck label="데이터 수정" disabled={role === "admin"} checked={role === "admin" || canEdit} onChange={setCanEdit} />
+                  <PermCheck label="데이터 삭제" disabled={role === "admin"} checked={role === "admin" || canDelete} onChange={setCanDelete} />
+                  <PermCheck label="엑셀 다운로드" disabled={role === "admin"} checked={role === "admin" || canExport} onChange={setCanExport} />
+                </div>
+              </div>
+
               {mode === "create" ? (
                 <Field label="초기 비밀번호" required error={errors.password?.[0]}>
                   <Input
@@ -122,33 +150,6 @@ export function UserFormDialog({
                   />
                 </Field>
               ) : null}
-
-              <div className="grid grid-cols-3 gap-2">
-                <Field label="지사" error={errors.branch?.[0]}>
-                  <Input
-                    name="branch"
-                    defaultValue={user?.branch ?? ""}
-                    className="h-10"
-                    placeholder="수유센터"
-                  />
-                </Field>
-                <Field label="본부" error={errors.hq?.[0]}>
-                  <Input
-                    name="hq"
-                    defaultValue={user?.hq ?? ""}
-                    className="h-10"
-                    placeholder="동의콜파트"
-                  />
-                </Field>
-                <Field label="팀" error={errors.team?.[0]}>
-                  <Input
-                    name="team"
-                    defaultValue={user?.team ?? ""}
-                    className="h-10"
-                    placeholder="곽영서팀"
-                  />
-                </Field>
-              </div>
             </div>
 
             <div className="flex justify-end gap-2 border-t bg-sidebar/40 px-5 py-3">
@@ -196,5 +197,28 @@ function Field({
       {children}
       {error ? <div className="text-xs text-destructive">{error}</div> : null}
     </div>
+  );
+}
+
+function PermCheck({
+  label,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm cursor-pointer">
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(v) => onChange(v === true)}
+      />
+      <span>{label}</span>
+    </label>
   );
 }

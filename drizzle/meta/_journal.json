@@ -8,6 +8,20 @@
       "when": 1776518564353,
       "tag": "0000_tranquil_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776547410601,
+      "tag": "0001_omniscient_justice",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776548253937,
+      "tag": "0002_loose_maginty",
+      "breakpoints": true
     }
   ]
 }

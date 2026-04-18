@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
 import { CALL_RESULTS } from "@/lib/excel/column-map";
 
 const ALL = "__all";
+const DEBOUNCE_MS = 400;
 
 export function SearchBar({
   agents,
@@ -27,57 +28,84 @@ export function SearchBar({
   const sp = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  // controlled state — 초기값은 현재 URL 쿼리에서 읽는다
   const [name, setName] = useState<string>(sp.get("name") ?? "");
   const [addr, setAddr] = useState<string>(sp.get("addr") ?? "");
+  const [phone, setPhone] = useState<string>(sp.get("phone") ?? "");
   const [callResult, setCallResult] = useState<string>(sp.get("callResult") ?? "");
   const [agentId, setAgentId] = useState<string>(sp.get("agentId") ?? "");
   const [rrnFront, setRrnFront] = useState<string>(sp.get("rrnFront") ?? "");
   const [rrnBack, setRrnBack] = useState<string>(sp.get("rrnBack") ?? "");
 
-  function commit() {
-    const next = new URLSearchParams();
-    const nm = name.trim();
-    const ad = addr.trim();
-    const rf = rrnFront.replace(/\D/g, "").slice(0, 6);
-    const rb = rrnBack.replace(/\D/g, "").slice(0, 7);
-    if (nm) next.set("name", nm);
-    if (ad) next.set("addr", ad);
-    if (callResult) next.set("callResult", callResult);
-    if (agentId) next.set("agentId", agentId);
-    if (rf.length === 6) next.set("rrnFront", rf);
-    if (rb.length === 7) next.set("rrnBack", rb);
-    const qs = next.toString();
-    startTransition(() => {
-      router.push(`/customers${qs ? `?${qs}` : ""}`);
-    });
-  }
+  const firstRenderRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    commit();
-  }
+  const commit = useCallback(
+    (immediate: boolean) => {
+      const next = new URLSearchParams();
+      const nm = name.trim();
+      const ad = addr.trim();
+      const ph = phone.replace(/\D/g, "");
+      const rf = rrnFront.replace(/\D/g, "").slice(0, 6);
+      const rb = rrnBack.replace(/\D/g, "").slice(0, 7);
+      if (nm) next.set("name", nm);
+      if (ad) next.set("addr", ad);
+      if (ph) next.set("phone", ph);
+      if (callResult) next.set("callResult", callResult);
+      if (agentId) next.set("agentId", agentId);
+      if (rf.length === 6) next.set("rrnFront", rf);
+      if (rb.length === 7) next.set("rrnBack", rb);
+      const qs = next.toString();
+
+      const run = () => {
+        startTransition(() => {
+          router.push(`/customers${qs ? `?${qs}` : ""}`);
+        });
+      };
+
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (immediate) run();
+      else debounceRef.current = setTimeout(run, DEBOUNCE_MS);
+    },
+    [name, addr, phone, callResult, agentId, rrnFront, rrnBack, router],
+  );
+
+  // 입력 변경 감지 → 자동 검색 (텍스트는 debounce, 드롭다운은 즉시)
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    commit(false);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [name, addr, phone, rrnFront, rrnBack, commit]);
+
+  useEffect(() => {
+    if (firstRenderRef.current) return;
+    commit(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callResult, agentId]);
 
   function reset() {
     setName("");
     setAddr("");
+    setPhone("");
     setCallResult("");
     setAgentId("");
     setRrnFront("");
     setRrnBack("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     startTransition(() => {
       router.push("/customers");
     });
   }
 
   const hasFilter =
-    !!name || !!addr || !!callResult || !!agentId || !!rrnFront || !!rrnBack;
+    !!name || !!addr || !!phone || !!callResult || !!agentId || !!rrnFront || !!rrnBack;
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4 shadow-sm"
-    >
+    <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-1.5 w-48">
         <Label htmlFor="f-name" className="text-xs text-muted-foreground">
           이름
@@ -100,6 +128,20 @@ export function SearchBar({
           onChange={(e) => setAddr(e.target.value)}
           placeholder="서울시 종로구"
           className="h-9"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5 w-40">
+        <Label htmlFor="f-phone" className="text-xs text-muted-foreground">
+          전화번호
+        </Label>
+        <Input
+          id="f-phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 13))}
+          inputMode="numeric"
+          placeholder="833 · 0107070"
+          className="h-9 font-mono tabular-nums"
+          autoComplete="off"
         />
       </div>
       <div className="flex flex-col gap-1.5 w-36">
@@ -177,15 +219,14 @@ export function SearchBar({
         />
       </div>
 
-      <div className="flex items-end gap-2">
-        <Button
-          type="submit"
-          disabled={pending}
-          className="h-9 bg-brand text-brand-foreground hover:bg-brand-hover"
+      <div className="flex items-end gap-2 ml-auto">
+        <div
+          className={`flex items-center gap-1.5 h-9 px-2 text-xs text-muted-foreground transition-opacity ${pending ? "opacity-100" : "opacity-0"}`}
+          aria-live="polite"
         >
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          검색
-        </Button>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          검색 중…
+        </div>
         <Button
           type="button"
           variant="ghost"
@@ -197,6 +238,10 @@ export function SearchBar({
           초기화
         </Button>
       </div>
-    </form>
+      {/* 자동 검색 동작 — 입력만 하면 결과 갱신. Enter 키는 불필요하지만 form이 아니므로 submit 이벤트 없음 */}
+      <div className="sr-only" aria-hidden>
+        <Search className="h-0 w-0" />
+      </div>
+    </div>
   );
 }

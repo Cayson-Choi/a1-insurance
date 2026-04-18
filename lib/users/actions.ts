@@ -56,9 +56,10 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
     name: d.name,
     role: d.role,
     passwordHash,
-    branch: d.branch,
-    hq: d.hq,
-    team: d.team,
+    canCreate: d.canCreate,
+    canEdit: d.canEdit,
+    canDelete: d.canDelete,
+    canExport: d.canExport,
   });
 
   revalidatePath("/admin/users");
@@ -95,9 +96,10 @@ export async function updateUserAction(
     .set({
       name: d.name,
       role: d.role,
-      branch: d.branch,
-      hq: d.hq,
-      team: d.team,
+      canCreate: d.canCreate,
+      canEdit: d.canEdit,
+      canDelete: d.canDelete,
+      canExport: d.canExport,
     })
     .where(eq(users.agentId, agentId));
 

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { desc, eq, ilike, sql, and, SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
-import { requireAdmin, ForbiddenError } from "@/lib/auth/rbac";
+import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseFilter } from "@/lib/customers/queries";
 import { hashPII } from "@/lib/crypto/pii";
 import { buildCustomersWorkbook, type ExportRow } from "@/lib/excel/exporter";
@@ -10,13 +10,10 @@ import { buildCustomersWorkbook, type ExportRow } from "@/lib/excel/exporter";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  try {
-    await requireAdmin();
-  } catch (e) {
-    if (e instanceof ForbiddenError) {
-      return new Response(e.message, { status: 403 });
-    }
-    throw e;
+  const user = await requireUser();
+  const perms = await getPermissions(user.agentId);
+  if (!perms?.canExport) {
+    return new Response("엑셀 다운로드 권한이 없습니다.", { status: 403 });
   }
 
   const sp: Record<string, string> = {};
@@ -29,6 +26,9 @@ export async function GET(req: NextRequest) {
   if (filter.agentId) conds.push(eq(customers.agentId, filter.agentId));
   if (filter.name) conds.push(ilike(customers.name, `%${filter.name}%`));
   if (filter.address) conds.push(ilike(customers.address, `%${filter.address}%`));
+  if (filter.phone) {
+    conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
+  }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
   if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
   if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));

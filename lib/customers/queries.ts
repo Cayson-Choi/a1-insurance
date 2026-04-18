@@ -8,6 +8,7 @@ import { hashPII, isValidRrnBack, isValidRrnFront } from "@/lib/crypto/pii";
 export type CustomerFilter = {
   name?: string;
   address?: string;
+  phone?: string;
   callResult?: CallResult;
   agentId?: string;
   rrnFront?: string;
@@ -44,9 +45,11 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
   };
   const rrnFrontRaw = pick("rrnFront")?.replace(/\D/g, "") ?? "";
   const rrnBackRaw = pick("rrnBack")?.replace(/\D/g, "") ?? "";
+  const phoneRaw = pick("phone")?.replace(/\D/g, "") ?? "";
   return {
     name: pick("name")?.trim() || undefined,
     address: pick("addr")?.trim() || undefined,
+    phone: phoneRaw || undefined,
     callResult: parseCallResult(pick("callResult")),
     agentId: pick("agentId")?.trim() || undefined,
     rrnFront: isValidRrnFront(rrnFrontRaw) ? rrnFrontRaw : undefined,
@@ -67,6 +70,10 @@ function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined 
 
   if (filter.name) conds.push(ilike(customers.name, `%${filter.name}%`));
   if (filter.address) conds.push(ilike(customers.address, `%${filter.address}%`));
+  if (filter.phone) {
+    // 저장된 전화번호에서 하이픈·공백 제거 후 숫자 substring 매칭
+    conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
+  }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
   if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
   if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));

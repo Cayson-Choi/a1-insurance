@@ -7,9 +7,10 @@ export type UserRow = {
   agentId: string;
   name: string;
   role: "admin" | "agent";
-  branch: string | null;
-  hq: string | null;
-  team: string | null;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canExport: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
   customerCount: number;
@@ -22,9 +23,10 @@ export async function listAllUsers(): Promise<UserRow[]> {
       agentId: users.agentId,
       name: users.name,
       role: users.role,
-      branch: users.branch,
-      hq: users.hq,
-      team: users.team,
+      canCreate: users.canCreate,
+      canEdit: users.canEdit,
+      canDelete: users.canDelete,
+      canExport: users.canExport,
       createdAt: users.createdAt,
       lastLoginAt: users.lastLoginAt,
       customerCount: sql<number>`count(${customers.id})::int`,

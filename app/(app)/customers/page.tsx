@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Download } from "lucide-react";
-import { requireUser } from "@/lib/auth/rbac";
+import { requireUserWithPerms } from "@/lib/auth/rbac";
 import { listCustomers, listAgents, parseFilter } from "@/lib/customers/queries";
 import { SearchBar } from "@/components/customers/search-bar";
 import { ListTable } from "@/components/customers/list-table";
@@ -16,10 +16,11 @@ type PageProps = {
 };
 
 export default async function CustomersPage({ searchParams }: PageProps) {
-  const user = await requireUser();
+  const user = await requireUserWithPerms();
   const params = await searchParams;
   const filter = parseFilter(params);
   const isAdmin = user.role === "admin";
+  const canExport = user.canExport;
 
   const [list, agents] = await Promise.all([
     listCustomers(filter, user),
@@ -47,7 +48,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
               : "본인에게 배정된 고객 목록입니다."}
           </p>
         </div>
-        {isAdmin ? (
+        {canExport ? (
           <a
             href={`/api/customers/export${preservedQuery ? `?${preservedQuery}` : ""}`}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium hover:bg-accent transition"

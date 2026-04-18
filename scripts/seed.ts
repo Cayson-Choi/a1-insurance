@@ -11,9 +11,6 @@ config({ path: ".env" });
 const agentDefaults = {
   password: "agent1234",
   role: "agent" as const,
-  branch: "수유센터",
-  hq: "동의콜파트",
-  team: "곽영서팀",
 };
 
 const SEED_USERS: Array<Omit<NewUser, "passwordHash"> & { password: string }> = [
@@ -22,9 +19,6 @@ const SEED_USERS: Array<Omit<NewUser, "passwordHash"> & { password: string }> = 
     password: "admin1234",
     name: "관리자",
     role: "admin",
-    branch: "본사",
-    hq: "관리부",
-    team: "시스템",
   },
   { ...agentDefaults, agentId: "a00003", name: "동의콜A" },
   { ...agentDefaults, agentId: "a00005", name: "동의콜D" },

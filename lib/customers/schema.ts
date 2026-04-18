@@ -56,20 +56,41 @@ const optionalRrnBack = z
     message: "주민번호 뒷자리는 숫자 7자리 입니다.",
   });
 
+const optionalNumeric = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => {
+    if (v === "" || v === undefined) return null;
+    const cleaned = v.replace(/,/g, "").trim();
+    return cleaned;
+  })
+  .refine((v) => v === null || !Number.isNaN(Number(v)), {
+    message: "숫자만 입력하세요.",
+  });
+
 export const UpdateCustomerSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   phone1: optionalPhone,
   job: optionalString,
   address: optionalString,
   addressDetail: optionalString,
+  birthDate: optionalDate,
   callResult: z.enum(CALL_RESULTS).nullable().optional(),
   dbCompany: optionalString,
   dbProduct: optionalString,
+  dbPremium: optionalNumeric,
+  subCategory: optionalString,
   dbStartAt: optionalDate,
+  dbEndAt: optionalDate,
+  dbRegisteredAt: optionalDate,
   reservationAt: optionalDateTime,
   memo: optionalString,
   rrnFront: optionalRrnFront,
   rrnBack: optionalRrnBack,
+  branch: optionalString,
+  hq: optionalString,
+  team: optionalString,
   agentId: z
     .string()
     .trim()

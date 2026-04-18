@@ -35,6 +35,9 @@ function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined 
   }
   if (filter.name) conds.push(ilike(customers.name, `%${filter.name}%`));
   if (filter.address) conds.push(ilike(customers.address, `%${filter.address}%`));
+  if (filter.phone) {
+    conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
+  }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
   if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
   if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));

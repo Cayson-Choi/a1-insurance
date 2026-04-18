@@ -2,6 +2,7 @@
 
 import { Edit3, KeyRound, Shield, Trash2, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -31,7 +32,7 @@ export function UserTable({
             <TableHead className="w-28">담당자ID</TableHead>
             <TableHead className="w-24">이름</TableHead>
             <TableHead className="w-20">역할</TableHead>
-            <TableHead>소속</TableHead>
+            <TableHead>권한</TableHead>
             <TableHead className="w-20 text-right">담당 고객</TableHead>
             <TableHead className="w-40">최근 로그인</TableHead>
             <TableHead className="w-[210px] text-right">동작</TableHead>
@@ -62,8 +63,17 @@ export function UserTable({
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {[u.branch, u.hq, u.team].filter(Boolean).join(" / ") || "—"}
+                <TableCell>
+                  {u.role === "admin" ? (
+                    <span className="text-xs text-muted-foreground">전체 권한</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      <PermBadge label="입력" on={u.canCreate} />
+                      <PermBadge label="수정" on={u.canEdit} />
+                      <PermBadge label="삭제" on={u.canDelete} />
+                      <PermBadge label="엑셀" on={u.canExport} />
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {u.customerCount.toLocaleString("ko-KR")}
@@ -127,5 +137,20 @@ export function UserTable({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+function PermBadge({ label, on }: { label: string; on: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
+        on
+          ? "bg-brand/15 text-[#b4610e] border-brand/30"
+          : "bg-muted text-muted-foreground/60 border-border line-through",
+      )}
+    >
+      {label}
+    </span>
   );
 }

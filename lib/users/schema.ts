@@ -1,12 +1,5 @@
 import { z } from "zod";
 
-const optionalString = z
-  .string()
-  .trim()
-  .max(60)
-  .optional()
-  .transform((v) => (v === "" || v === undefined ? null : v));
-
 const AgentIdSchema = z
   .string()
   .trim()
@@ -19,22 +12,28 @@ const PasswordSchema = z
   .min(6, "비밀번호는 6자 이상 입력하세요.")
   .max(200);
 
+const boolFlag = z
+  .any()
+  .transform((v) => v === true || v === "true" || v === "on" || v === "1");
+
 export const CreateUserSchema = z.object({
   agentId: AgentIdSchema,
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   role: z.enum(["admin", "agent"]),
   password: PasswordSchema,
-  branch: optionalString,
-  hq: optionalString,
-  team: optionalString,
+  canCreate: boolFlag,
+  canEdit: boolFlag,
+  canDelete: boolFlag,
+  canExport: boolFlag,
 });
 
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   role: z.enum(["admin", "agent"]),
-  branch: optionalString,
-  hq: optionalString,
-  team: optionalString,
+  canCreate: boolFlag,
+  canEdit: boolFlag,
+  canDelete: boolFlag,
+  canExport: boolFlag,
 });
 
 export const ResetPasswordSchema = z.object({
