@@ -1,6 +1,6 @@
-# JK-CRM — 운영 인수인계 가이드
+# DB-CRM — 운영 인수인계 가이드
 
-**JK-CRM (Customer & Data Management)** 관리자·담당자용 사용 매뉴얼 및 일상 운영 안내.
+**DB-CRM (Customer & Data Management)** 관리자·담당자용 사용 매뉴얼 및 일상 운영 안내.
 
 > 기술 배포·DB 설정은 [README.md](./README.md)를, 전체 제품 요구사항은 [prd.md](./prd.md)를 참고하세요.
 
@@ -139,7 +139,7 @@
 - **전체 다운로드**: `엑셀 업/다운로드` → **전체 다운로드**
 - **검색 결과만**: 고객 목록에서 필터 적용 후 우상단 **엑셀 다운로드** 버튼
 - 컬럼 28개 그대로 출력 (주민번호 평문 포함)
-- 파일명: `JK-CRM_고객명부_YYYYMMDD-HHmm.xlsx`
+- 파일명: `DB-CRM_고객명부_YYYYMMDD-HHmm.xlsx`
 
 ---
 

@@ -4,11 +4,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "JK-CRM 고객·데이터 관리",
-    template: "%s · JK-CRM",
+    default: "DB-CRM 고객·데이터 관리",
+    template: "%s · DB-CRM",
   },
-  description: "JK-CRM — Customer & Data Management System",
-  applicationName: "JK-CRM",
+  description: "DB-CRM — Customer & Data Management System",
+  applicationName: "DB-CRM",
   robots: { index: false, follow: false },
 };
 

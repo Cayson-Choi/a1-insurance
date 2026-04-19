@@ -12,7 +12,7 @@
   --font-heading: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  /* JK-CRM brand tokens */
+  /* DB-CRM brand tokens */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-hover: var(--brand-hover);
@@ -58,7 +58,7 @@
 }
 
 :root {
-  /* JK-CRM brand — primary teal #0891b2, hover #0e7490, accent deep blue #1e3a8a */
+  /* DB-CRM brand — primary teal #0891b2, hover #0e7490, accent deep blue #1e3a8a */
   --brand: #0891b2;
   --brand-hover: #0e7490;
   --brand-foreground: #ffffff;

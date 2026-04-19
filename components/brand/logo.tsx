@@ -17,7 +17,7 @@ export function Logo({
     return (
       <div className={cn("flex flex-col items-center gap-2", className)}>
         <Image
-          src="/brand/jk-crm-logo.png"
+          src="/brand/db-crm-logo.png"
           alt={COMPANY.nameKo}
           width={300}
           height={150}
@@ -32,7 +32,7 @@ export function Logo({
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Image
-        src="/brand/jk-crm-logo.png"
+        src="/brand/db-crm-logo.png"
         alt={COMPANY.nameKo}
         width={200}
         height={100}

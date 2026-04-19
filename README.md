@@ -1,4 +1,4 @@
-# JK-CRM — Customer & Data Management
+# DB-CRM — Customer & Data Management
 
 보험·금융 영업 담당자를 위한 고객 관리(CRM) 웹 애플리케이션.
 
@@ -16,7 +16,7 @@
 - **엑셀 I/O**: 28컬럼 import/export, 평문 주민번호 처리, 중복 방지(고객코드No 또는 name+phone fallback)
 - **관리자**: 사용자 CRUD + 비밀번호 재설정, 담당자별 권한 4종 체크박스, 담당자 일괄 변경, 변경 이력 뷰어, 고객 삭제(canDelete 권한)
 - **모바일**: 햄버거 메뉴, 테이블 가로 스크롤, 팝업 풀스크린, 검색바 2열 그리드
-- **브랜드**: JK-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트
+- **브랜드**: DB-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트
 
 ---
 
@@ -49,8 +49,8 @@
 ### 1. 저장소 클론 + 의존성 설치
 
 ```bash
-git clone https://github.com/Cayson-Choi/a1-insurance jk-crm
-cd jk-crm
+git clone https://github.com/Cayson-Choi/a1-insurance db-crm
+cd db-crm
 pnpm install
 ```
 
@@ -158,7 +158,7 @@ pnpm db:import-xlsx   # material/고객명부.xlsx 일괄 import
 
 ```
 app/
-  (auth)/login/                  로그인 (JK-CRM 로고)
+  (auth)/login/                  로그인 (DB-CRM 로고)
   (app)/
     layout.tsx                   인증 필수 · 헤더/풋터 · 유휴 타임아웃
     customers/                   고객 목록·검색·상세
@@ -176,7 +176,7 @@ lib/
   excel/                         28컬럼 매핑·importer·exporter
   audit/                         감사로그 쿼리·diff
   users/                         사용자 CRUD
-  company.ts                     JK-CRM 브랜드 상수
+  company.ts                     DB-CRM 브랜드 상수
   env.ts                         zod 기반 env 검증
   format.ts                      전화·날짜·금액·마스킹 유틸
 
@@ -190,7 +190,7 @@ components/
 scripts/                         CLI용 (migrate · seed · import-xlsx)
 drizzle/                         생성된 마이그레이션 SQL (0000–0005)
 material/                        원본 레퍼런스 (고객명부.xlsx, 로고 등)
-public/brand/jk-crm-logo.png     JK-CRM 로고
+public/brand/db-crm-logo.png     DB-CRM 로고
 ```
 
 ---

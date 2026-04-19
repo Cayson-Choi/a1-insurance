@@ -59,7 +59,7 @@ export async function buildCustomersWorkbook(
   rows: ExportRow[],
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "JK-CRM";
+  wb.creator = "DB-CRM";
   wb.created = new Date();
 
   const ws = wb.addWorksheet("고객명부");
