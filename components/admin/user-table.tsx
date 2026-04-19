@@ -144,7 +144,7 @@ function PermBadge({ label, on }: { label: string; on: boolean }) {
       className={cn(
         "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
         on
-          ? "bg-brand/15 text-[#b4610e] border-brand/30"
+          ? "bg-brand/15 text-[#155e75] border-brand/30"
           : "bg-muted text-muted-foreground/60 border-border line-through",
       )}
     >

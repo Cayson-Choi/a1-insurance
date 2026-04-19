@@ -59,7 +59,7 @@ export async function buildCustomersWorkbook(
   rows: ExportRow[],
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "A-ONE CRM";
+  wb.creator = "JG-ORM";
   wb.created = new Date();
 
   const ws = wb.addWorksheet("고객명부");

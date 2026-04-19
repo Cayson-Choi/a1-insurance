@@ -17,13 +17,13 @@ export function Logo({
     return (
       <div className={cn("flex flex-col items-center gap-2", className)}>
         <Image
-          src="/brand/aonefs-ci.gif"
+          src="/brand/jg-orm-logo.png"
           alt={COMPANY.nameKo}
-          width={220}
-          height={96}
+          width={300}
+          height={150}
           priority={priority}
           unoptimized
-          className="h-24 w-auto"
+          className="h-32 w-auto"
         />
       </div>
     );
@@ -32,15 +32,15 @@ export function Logo({
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Image
-        src="/brand/aonefs-logo.png"
+        src="/brand/jg-orm-logo.png"
         alt={COMPANY.nameKo}
         width={200}
-        height={32}
+        height={100}
         priority={priority}
         unoptimized
         className={cn(
           "w-auto",
-          variant === "mark" ? "h-6" : "h-8",
+          variant === "mark" ? "h-8" : "h-10",
         )}
       />
     </div>

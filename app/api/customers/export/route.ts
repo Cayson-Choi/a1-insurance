@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   const now = new Date();
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
-  const filename = `A-ONE_고객명부_${ts}.xlsx`;
+  const filename = `JG-ORM_고객명부_${ts}.xlsx`;
 
   return new Response(buffer as ArrayBuffer, {
     status: 200,

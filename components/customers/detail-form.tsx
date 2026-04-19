@@ -727,7 +727,7 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
       className={cn(
         "inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium",
         ok
-          ? "bg-brand/15 text-[#b4610e] border-brand/30"
+          ? "bg-brand/15 text-[#155e75] border-brand/30"
           : "bg-muted text-muted-foreground border-border",
       )}
     >

@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { CallResult } from "@/lib/excel/column-map";
 
 const STYLE: Record<CallResult, string> = {
-  예약: "bg-brand/15 text-[#b4610e] border-brand/30",
+  예약: "bg-brand/15 text-[#155e75] border-brand/30",
   부재: "bg-slate-100 text-slate-700 border-slate-200",
   가망: "bg-emerald-50 text-emerald-700 border-emerald-200",
   거절: "bg-rose-50 text-rose-700 border-rose-200",

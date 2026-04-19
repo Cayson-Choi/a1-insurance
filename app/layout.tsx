@@ -4,12 +4,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "에이원 고객관리 시스템",
-    template: "%s · 에이원 고객관리",
+    default: "JG-ORM 고객·데이터 관리",
+    template: "%s · JG-ORM",
   },
-  description:
-    "에이원금융판매(주) 보험 고객 상담·관리 시스템. ALWAYS WITH CUSTOMERS.",
-  applicationName: "A-ONE CRM",
+  description: "JG-ORM — Customer & Data Management System",
+  applicationName: "JG-ORM",
   robots: { index: false, follow: false },
 };
 

@@ -43,9 +43,8 @@ export default async function LoginPage({
       </div>
 
       <footer className="mt-8 space-y-1 text-center text-xs text-muted-foreground">
-        <div>{COMPANY.nameKo} · 대표이사 {COMPANY.ceo}</div>
-        <div>사업자등록번호 {COMPANY.bizRegNo} · TEL {COMPANY.tels[0]}</div>
-        <div>© {new Date().getFullYear()} {COMPANY.nameKo}. All rights reserved.</div>
+        <div>{COMPANY.tagline}</div>
+        <div>© {new Date().getFullYear()} {COMPANY.nameEn}. All rights reserved.</div>
       </footer>
     </div>
   );

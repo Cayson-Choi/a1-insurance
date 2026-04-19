@@ -24,7 +24,7 @@ const ACTION_META: Record<
   },
   agent_change: {
     label: "담당자 변경",
-    className: "bg-brand-muted text-[#8a4a06] border-brand/30",
+    className: "bg-brand-muted text-[#155e75] border-brand/30",
     icon: UserCog,
   },
   bulk_change: {

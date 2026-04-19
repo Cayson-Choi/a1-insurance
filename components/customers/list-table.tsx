@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { BulkReassignDialog } from "@/components/customers/bulk-reassign-dialog";
-import { formatDate, formatPhone, maskPhone, shortAddress } from "@/lib/format";
+import { formatDate, formatPhone, maskPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ListedCustomer } from "@/lib/customers/queries";
 
@@ -94,15 +94,15 @@ export function ListTable({
                   />
                 </TableHead>
               ) : null}
-              {showAgentColumn ? <TableHead className="w-28">담당자</TableHead> : null}
-              <TableHead className="w-28">이름</TableHead>
-              <TableHead className="w-36">연락처</TableHead>
-              <TableHead className="w-28">생년월일</TableHead>
+              {showAgentColumn ? <TableHead className="w-24 whitespace-nowrap">담당자</TableHead> : null}
+              <TableHead className="w-20 whitespace-nowrap">이름</TableHead>
+              <TableHead className="w-36 whitespace-nowrap">연락처</TableHead>
+              <TableHead className="w-28 whitespace-nowrap">생년월일</TableHead>
               <TableHead>주소</TableHead>
-              <TableHead className="w-44">직업</TableHead>
-              <TableHead className="w-24">통화결과</TableHead>
-              <TableHead className="w-28">보험사</TableHead>
-              <TableHead className="w-28">DB 등록일</TableHead>
+              <TableHead>직업</TableHead>
+              <TableHead className="w-24 whitespace-nowrap">통화결과</TableHead>
+              <TableHead className="w-24 whitespace-nowrap">보험사</TableHead>
+              <TableHead className="w-28 whitespace-nowrap">DB 등록일</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -152,11 +152,11 @@ export function ListTable({
                   </TableCell>
                   <TableCell className="text-sm">
                     <Link href={href} className="block" title={c.address ?? ""}>
-                      {shortAddress(c.address, 28)}
+                      {c.address}
                     </Link>
                   </TableCell>
                   <TableCell className="text-sm">
-                    <Link href={href} className="block truncate max-w-40" title={c.job ?? ""}>
+                    <Link href={href} className="block" title={c.job ?? ""}>
                       {c.job}
                     </Link>
                   </TableCell>
