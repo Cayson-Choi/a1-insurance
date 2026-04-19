@@ -91,24 +91,62 @@ function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[
   // 컬럼 매핑 — 사용자 정렬 후 안정적인 tie-breaker로 createdAt DESC 추가
   const target = (() => {
     switch (sort) {
+      case "customerCode":
+        return customers.customerCode;
       case "agentName":
         return users.name;
+      case "agentId":
+        return customers.agentId;
       case "name":
         return customers.name;
-      case "phone1":
-        return customers.phone1;
       case "birthDate":
         return customers.birthDate;
-      case "address":
-        return customers.address;
+      case "rrn":
+        return customers.rrnFront;
+      case "phone1":
+        return customers.phone1;
       case "job":
         return customers.job;
+      case "address":
+        return customers.address;
+      case "addressDetail":
+        return customers.addressDetail;
       case "callResult":
         return customers.callResult;
+      case "dbProduct":
+        return customers.dbProduct;
+      case "dbPremium":
+        return customers.dbPremium;
+      case "dbHandler":
+        return customers.dbHandler;
+      case "subCategory":
+        return customers.subCategory;
+      case "dbPolicyNo":
+        return customers.dbPolicyNo;
+      case "dbRegisteredAt":
+        return customers.dbRegisteredAt;
+      case "mainCategory":
+        return customers.mainCategory;
+      case "dbStartAt":
+        return customers.dbStartAt;
+      case "branch":
+        return customers.branch;
+      case "hq":
+        return customers.hq;
+      case "team":
+        return customers.team;
+      case "fax":
+        return customers.fax;
+      case "reservationReceived":
+        return customers.reservationReceived;
       case "dbCompany":
         return customers.dbCompany;
       case "dbEndAt":
         return customers.dbEndAt;
+      case "createdAt":
+        return customers.createdAt;
+      case "updatedAt":
+        return customers.updatedAt;
     }
   })();
   return [direction(target), desc(customers.createdAt)];
@@ -150,12 +188,30 @@ export type ListedCustomer = {
   agentName: string | null;
   name: string;
   birthDate: string | null;
+  rrnFront: string | null;
+  rrnBack: string | null;
   phone1: string | null;
   job: string | null;
   address: string | null;
+  addressDetail: string | null;
   callResult: CallResult | null;
+  dbProduct: string | null;
+  dbPremium: string | null;
+  dbHandler: string | null;
+  subCategory: string | null;
+  dbPolicyNo: string | null;
+  dbRegisteredAt: string | null;
+  mainCategory: string | null;
+  dbStartAt: string | null;
+  branch: string | null;
+  hq: string | null;
+  team: string | null;
+  fax: string | null;
+  reservationReceived: string | null;
   dbCompany: string | null;
   dbEndAt: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 };
 
 export type ListResult = {
@@ -188,12 +244,30 @@ export async function listCustomers(
       agentName: users.name,
       name: customers.name,
       birthDate: customers.birthDate,
+      rrnFront: customers.rrnFront,
+      rrnBack: customers.rrnBack,
       phone1: customers.phone1,
       job: customers.job,
       address: customers.address,
+      addressDetail: customers.addressDetail,
       callResult: customers.callResult,
+      dbProduct: customers.dbProduct,
+      dbPremium: customers.dbPremium,
+      dbHandler: customers.dbHandler,
+      subCategory: customers.subCategory,
+      dbPolicyNo: customers.dbPolicyNo,
+      dbRegisteredAt: customers.dbRegisteredAt,
+      mainCategory: customers.mainCategory,
+      dbStartAt: customers.dbStartAt,
+      branch: customers.branch,
+      hq: customers.hq,
+      team: customers.team,
+      fax: customers.fax,
+      reservationReceived: customers.reservationReceived,
       dbCompany: customers.dbCompany,
       dbEndAt: customers.dbEndAt,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
     })
     .from(customers)
     .leftJoin(users, eq(customers.agentId, users.agentId))

@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { BulkReassignDialog } from "@/components/customers/bulk-reassign-dialog";
 import { useTablePrefs } from "@/components/customers/use-table-prefs";
-import { formatDate, formatPhone, maskPhone } from "@/lib/format";
+import { formatDate, formatDateTime, formatPhone, maskPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   CUSTOMER_COLUMNS,
@@ -190,7 +190,7 @@ export function ListTable({
 
       <div className="border bg-card shadow-sm overflow-x-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <table className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 900 }}>
+          <table className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
             <colgroup>
               {canBulkEdit ? <col style={{ width: 40 }} /> : null}
               {visibleIds.map((id) => (
@@ -458,24 +458,66 @@ function renderCellContent(
   canUnmaskPhone: boolean,
 ): React.ReactNode {
   switch (id) {
+    case "customerCode":
+      return c.customerCode ?? "";
     case "agentName":
       return c.agentName ?? <span className="text-muted-foreground">미배정</span>;
+    case "agentId":
+      return c.agentId ?? <span className="text-muted-foreground">미배정</span>;
     case "name":
       return c.name;
-    case "phone1":
-      return canUnmaskPhone ? formatPhone(c.phone1) : maskPhone(c.phone1);
     case "birthDate":
       return formatDate(c.birthDate);
-    case "address":
-      return c.address ?? "";
+    case "rrn": {
+      const front = c.rrnFront ?? "";
+      const back = c.rrnBack ?? "";
+      if (!front && !back) return "";
+      return `${front}${front && back ? "-" : ""}${back}`;
+    }
+    case "phone1":
+      return canUnmaskPhone ? formatPhone(c.phone1) : maskPhone(c.phone1);
     case "job":
       return c.job ?? "";
+    case "address":
+      return c.address ?? "";
+    case "addressDetail":
+      return c.addressDetail ?? "";
     case "callResult":
       return <CallResultBadge value={c.callResult} />;
+    case "dbProduct":
+      return c.dbProduct ?? "";
+    case "dbPremium":
+      return c.dbPremium ? Number(c.dbPremium).toLocaleString("ko-KR") : "";
+    case "dbHandler":
+      return c.dbHandler ?? "";
+    case "subCategory":
+      return c.subCategory ?? "";
+    case "dbPolicyNo":
+      return c.dbPolicyNo ?? "";
+    case "dbRegisteredAt":
+      return formatDate(c.dbRegisteredAt);
+    case "mainCategory":
+      return c.mainCategory ?? "";
+    case "dbStartAt":
+      return formatDate(c.dbStartAt);
+    case "branch":
+      return c.branch ?? "";
+    case "hq":
+      return c.hq ?? "";
+    case "team":
+      return c.team ?? "";
+    case "fax":
+      return c.fax ?? "";
+    case "reservationReceived":
+      return formatDate(c.reservationReceived);
     case "dbCompany":
       return c.dbCompany ?? "";
     case "dbEndAt":
       return formatDate(c.dbEndAt);
+    case "createdAt":
+      return formatDateTime(c.createdAt);
+    case "updatedAt":
+      return formatDateTime(c.updatedAt);
   }
 }
 
@@ -483,17 +525,23 @@ function cellClass(id: CustomerColumnId): string {
   switch (id) {
     case "name":
       return "font-medium";
+    case "customerCode":
     case "phone1":
+    case "rrn":
+    case "fax":
     case "birthDate":
+    case "dbStartAt":
     case "dbEndAt":
+    case "dbRegisteredAt":
+    case "reservationReceived":
+    case "createdAt":
+    case "updatedAt":
+    case "agentId":
       return "font-mono tabular-nums text-sm";
-    case "agentName":
-    case "address":
-    case "job":
-    case "dbCompany":
-      return "text-sm";
+    case "dbPremium":
+      return "tabular-nums text-sm text-right";
     default:
-      return "";
+      return "text-sm";
   }
 }
 
