@@ -2,6 +2,8 @@ import type { NextAuthConfig } from "next-auth";
 
 const PUBLIC_PATHS = ["/login"];
 
+// Edge runtime 호환을 위해 DB 의존 로직(jwt·session)은 auth.ts 로 분리.
+// 여기엔 미들웨어에서 호출 가능한 가벼운 라우트 가드만 남긴다.
 export default {
   providers: [],
   pages: {
@@ -31,22 +33,6 @@ export default {
       }
 
       return true;
-    },
-    jwt({ token, user }) {
-      if (user) {
-        token.agentId = user.agentId;
-        token.role = user.role;
-        token.name = user.name;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      if (token && session.user) {
-        session.user.agentId = (token.agentId as string) ?? "";
-        session.user.role = (token.role as "admin" | "agent") ?? "agent";
-        session.user.name = (token.name as string) ?? session.user.name;
-      }
-      return session;
     },
   },
 } satisfies NextAuthConfig;

@@ -3,12 +3,11 @@ import { z } from "zod";
 const EnvSchema = z.object({
   DATABASE_URL: z.string().url().min(1),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 chars"),
-  PII_ENC_KEY: z
-    .string()
-    .regex(/^[0-9a-fA-F]{64}$/, "PII_ENC_KEY must be 32-byte hex (64 chars)"),
-  PII_HMAC_KEY: z
-    .string()
-    .regex(/^[0-9a-fA-F]{64}$/, "PII_HMAC_KEY must be 32-byte hex (64 chars)"),
+  // 레거시 변수 — 주민번호 평문 저장으로 더 이상 사용하지 않지만 기존 배포 호환 위해 optional 유지
+  PII_ENC_KEY: z.string().optional(),
+  PII_HMAC_KEY: z.string().optional(),
+  // 로그인 알림용 Slack Incoming Webhook URL (선택)
+  SLACK_WEBHOOK_URL: z.string().url().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

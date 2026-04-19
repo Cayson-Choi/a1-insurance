@@ -25,6 +25,7 @@ const ADMIN_NAV = [
   { href: "/admin/users", label: "사용자 관리" },
   { href: "/admin/excel", label: "엑셀 업/다운로드" },
   { href: "/admin/audit", label: "변경 이력" },
+  { href: "/admin/logins", label: "로그인 이력" },
 ] as const;
 
 export function AppHeader({ user }: { user: SessionUser }) {

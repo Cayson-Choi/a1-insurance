@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/rbac";
 import { hashPassword } from "@/lib/auth/password";
+import { notifyForceLogout } from "@/lib/notifications/slack";
 import {
   CreateUserSchema,
   UpdateUserSchema,
@@ -128,6 +129,31 @@ export async function resetPasswordAction(
 
   const passwordHash = await hashPassword(parsed.data.password);
   await db.update(users).set({ passwordHash }).where(eq(users.agentId, agentId));
+
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+export async function forceLogoutAction(agentId: string): Promise<ActionResult> {
+  const actor = await requireAdmin();
+  if (actor.agentId === agentId) {
+    return { ok: false, error: "본인 계정은 강제 로그아웃할 수 없습니다." };
+  }
+  const target = await db.query.users.findFirst({ where: eq(users.agentId, agentId) });
+  if (!target) return { ok: false, error: "사용자를 찾을 수 없습니다." };
+
+  const now = new Date();
+  await db
+    .update(users)
+    .set({ sessionsInvalidatedAt: now })
+    .where(eq(users.agentId, agentId));
+
+  notifyForceLogout({
+    actorAgentId: actor.agentId,
+    targetAgentId: target.agentId,
+    targetName: target.name,
+    at: now,
+  });
 
   revalidatePath("/admin/users");
   return { ok: true };

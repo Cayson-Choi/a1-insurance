@@ -43,6 +43,13 @@
       "when": 1776800000000,
       "tag": "0005_split_manage_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776900000000,
+      "tag": "0006_login_tracking",
+      "breakpoints": true
     }
   ]
 }

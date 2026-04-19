@@ -13,6 +13,8 @@ export type UserRow = {
   canExport: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
+  lastSeenAt: Date | null;
+  sessionsInvalidatedAt: Date | null;
   customerCount: number;
 };
 
@@ -29,6 +31,8 @@ export async function listAllUsers(): Promise<UserRow[]> {
       canExport: users.canExport,
       createdAt: users.createdAt,
       lastLoginAt: users.lastLoginAt,
+      lastSeenAt: users.lastSeenAt,
+      sessionsInvalidatedAt: users.sessionsInvalidatedAt,
       customerCount: sql<number>`count(${customers.id})::int`,
     })
     .from(users)
@@ -38,3 +42,5 @@ export async function listAllUsers(): Promise<UserRow[]> {
 
   return rows as UserRow[];
 }
+
+// isOnline() 은 lib/users/online.ts 로 이동 — 클라이언트에서도 안전하게 import 가능하도록 DB 의존 모듈과 분리

@@ -49,8 +49,32 @@ export const users = pgTable(
       .notNull()
       .defaultNow(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    // 관리자가 강제 로그아웃 시킨 시각 — JWT iat 이 이 값보다 이전이면 세션 무효
+    sessionsInvalidatedAt: timestamp("sessions_invalidated_at", { withTimezone: true }),
+    // 매 요청마다 throttle 되어 갱신되는 활동 시각 ("접속 중" 판정)
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("users_agent_id_uq").on(t.agentId)],
+);
+
+// 로그인 성공·실패 이벤트 로그 (감사용)
+export const loginEvents = pgTable(
+  "login_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: varchar("agent_id", { length: 20 }),
+    success: boolean("success").notNull(),
+    ip: varchar("ip", { length: 45 }),
+    userAgent: varchar("user_agent", { length: 500 }),
+    reason: varchar("reason", { length: 100 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("login_events_agent_idx").on(t.agentId, t.createdAt),
+    index("login_events_created_idx").on(t.createdAt),
+  ],
 );
 
 export const customers = pgTable(
@@ -131,3 +155,5 @@ export type NewUser = typeof users.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type LoginEvent = typeof loginEvents.$inferSelect;
+export type NewLoginEvent = typeof loginEvents.$inferInsert;
