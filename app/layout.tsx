@@ -2,14 +2,46 @@ import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
+// OG 이미지·링크 프리뷰 용 절대 URL 기준.
+// 우선순위: NEXT_PUBLIC_SITE_URL (운영 도메인 지정) → VERCEL_URL (Preview 자동 주입) → localhost
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+const TITLE = "DB-CRM 고객·데이터 관리";
+const DESCRIPTION = "DB-CRM — Customer & Data Management System";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "DB-CRM 고객·데이터 관리",
+    default: TITLE,
     template: "%s · DB-CRM",
   },
-  description: "DB-CRM — Customer & Data Management System",
+  description: DESCRIPTION,
   applicationName: "DB-CRM",
   robots: { index: false, follow: false },
+  openGraph: {
+    type: "website",
+    siteName: "DB-CRM",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: siteUrl,
+    locale: "ko_KR",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "DB-CRM — Customer & Data Management",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
