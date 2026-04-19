@@ -8,6 +8,9 @@ const EnvSchema = z.object({
   PII_HMAC_KEY: z.string().optional(),
   // 로그인 알림용 Slack Incoming Webhook URL (선택)
   SLACK_WEBHOOK_URL: z.string().url().optional(),
+  // 로그인 알림용 Telegram Bot (선택) — 둘 다 설정돼야 동작
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

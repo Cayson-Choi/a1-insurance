@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import authConfig from "./auth.config";
 import { db } from "@/lib/db/client";
 import { users, loginEvents } from "@/lib/db/schema";
-import { notifyLogin } from "@/lib/notifications/slack";
+import { notifyLogin } from "@/lib/notifications";
 
 const CredentialsSchema = z.object({
   agentId: z.string().trim().min(1).max(20),

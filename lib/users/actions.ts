@@ -6,7 +6,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/rbac";
 import { hashPassword } from "@/lib/auth/password";
-import { notifyForceLogout } from "@/lib/notifications/slack";
+import { notifyForceLogout } from "@/lib/notifications";
 import {
   CreateUserSchema,
   UpdateUserSchema,

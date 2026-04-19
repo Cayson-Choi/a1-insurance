@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import { simplifyUserAgent } from "@/lib/notifications/slack";
+import { simplifyUserAgent } from "@/lib/notifications/format";
 import type { LoginEventRow } from "@/lib/logins/queries";
 
 export function LoginHistoryTable({ rows }: { rows: LoginEventRow[] }) {
