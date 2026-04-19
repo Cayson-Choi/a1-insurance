@@ -54,7 +54,7 @@ export function UserDeleteDialog({
             </div>
             {customerCount > 0 ? (
               <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
-                ⚠ 이 담당자에게 배정된 고객이 <b>{customerCount}건</b> 있습니다. 삭제 시 해당 고객은 "미배정" 상태로 전환되며, 이후 관리자가 재배정해야 합니다.
+                ⚠ 이 담당자에게 배정된 고객이 <b>{customerCount}건</b> 있습니다. 삭제 시 해당 고객은 &lsquo;미배정&rsquo; 상태로 전환되며, 이후 관리자가 재배정해야 합니다.
               </div>
             ) : null}
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">

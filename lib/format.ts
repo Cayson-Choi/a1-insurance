@@ -35,21 +35,6 @@ export function formatDateTime(value: Date | string | null | undefined): string 
   return `${formatDate(d)} ${hh}:${mm}`;
 }
 
-export function formatCurrency(
-  value: string | number | null | undefined,
-  suffix = "원",
-): string {
-  if (value === null || value === undefined || value === "") return "";
-  const n = typeof value === "string" ? Number(value) : value;
-  if (Number.isNaN(n)) return "";
-  return `${n.toLocaleString("ko-KR")}${suffix}`;
-}
-
-export function maskRrn(front: string | null | undefined): string {
-  if (!front) return "";
-  return `${front}-*******`;
-}
-
 export function maskPhone(raw: string | null | undefined): string {
   if (!raw) return "";
   const digits = raw.replace(/\D/g, "");
@@ -57,9 +42,4 @@ export function maskPhone(raw: string | null | undefined): string {
     return `${digits.slice(0, 3)}-****-${digits.slice(7)}`;
   }
   return formatPhone(raw);
-}
-
-export function shortAddress(addr: string | null | undefined, max = 24): string {
-  if (!addr) return "";
-  return addr.length > max ? `${addr.slice(0, max)}…` : addr;
 }

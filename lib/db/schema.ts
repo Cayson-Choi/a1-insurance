@@ -11,7 +11,6 @@ import {
   boolean,
   index,
   uniqueIndex,
-  customType,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -32,12 +31,6 @@ export const auditActionEnum = pgEnum("audit_action", [
   "edit",
   "rrn_decrypt",
 ]);
-
-const bytea = customType<{ data: Buffer; default: false }>({
-  dataType() {
-    return "bytea";
-  },
-});
 
 export const users = pgTable(
   "users",

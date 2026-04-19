@@ -188,7 +188,6 @@ export function DetailDialog({
             onClose={close}
             onPrev={() => go(prevId)}
             onNext={() => go(nextId)}
-            onSaved={(updated) => setCustomer(updated)}
           />
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

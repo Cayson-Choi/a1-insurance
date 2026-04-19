@@ -31,7 +31,7 @@ export default async function AdminExcelPage() {
               업로드
             </CardTitle>
             <CardDescription>
-              먼저 "미리보기"로 파일 검증 후 "업로드 실행"으로 DB에 반영하세요.
+              먼저 &lsquo;미리보기&rsquo;로 파일 검증 후 &lsquo;업로드 실행&rsquo;으로 DB에 반영하세요.
             </CardDescription>
           </CardHeader>
           <CardContent>

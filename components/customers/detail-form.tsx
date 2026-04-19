@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { CALL_RESULTS } from "@/lib/excel/column-map";
-import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
+import { formatDateTime, formatPhone } from "@/lib/format";
 import type { CustomerDetail } from "@/lib/customers/get-detail";
 import { updateCustomerAction } from "@/lib/customers/actions";
 
@@ -86,7 +86,6 @@ type Props = {
   onClose?: () => void;
   onPrev?: () => void;
   onNext?: () => void;
-  onSaved?: (customer: CustomerDetail) => void;
   variant?: "modal" | "page";
 };
 
@@ -103,7 +102,6 @@ export function DetailForm({
   onClose,
   onPrev,
   onNext,
-  onSaved,
   variant = "modal",
 }: Props) {
   const router = useRouter();
