@@ -40,7 +40,7 @@ export function Logo({
         unoptimized
         className={cn(
           "w-auto",
-          variant === "mark" ? "h-8" : "h-10",
+          variant === "mark" ? "h-7" : "h-8",
         )}
       />
     </div>

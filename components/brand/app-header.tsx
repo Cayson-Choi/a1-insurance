@@ -33,7 +33,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-16 w-full max-w-screen-2xl items-center gap-3 md:gap-6 px-3 md:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-screen-2xl items-center gap-2 md:gap-3 px-3 md:px-6">
         {/* 모바일 햄버거 메뉴 */}
         <DropdownMenu>
           <DropdownMenuTrigger
