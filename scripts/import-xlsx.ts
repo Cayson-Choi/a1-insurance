@@ -10,7 +10,6 @@ import {
   extractRrnBackRaw,
   birthDateToFrontYymmdd,
 } from "@/lib/excel/column-map";
-import { encryptPII, hashPII } from "@/lib/crypto/pii";
 import { and, eq, isNull } from "drizzle-orm";
 
 config({ path: ".env.local" });
@@ -65,8 +64,8 @@ async function main() {
   let inserted = 0;
   let updated = 0;
   let unknownAgent = 0;
-  let rrnBackEnc = 0;
-  let rrnFrontHashed = 0;
+  let rrnBackCount = 0;
+  let rrnFrontCount = 0;
 
   for (const raw of rows) {
     const customer: Partial<NewCustomer> & ReturnType<typeof rowToCustomer> = rowToCustomer(raw);
@@ -77,17 +76,16 @@ async function main() {
       customer.agentId = null;
     }
 
-    // 주민번호 암호화 + 해시
+    // 주민번호 평문 저장
     const back = extractRrnBackRaw(raw);
     if (back) {
-      customer.rrnBackEnc = encryptPII(back);
-      customer.rrnBackHash = hashPII(back);
-      rrnBackEnc++;
+      customer.rrnBack = back;
+      rrnBackCount++;
     }
     const front = birthDateToFrontYymmdd(customer.birthDate ?? null);
     if (front) {
-      customer.rrnFrontHash = hashPII(front);
-      rrnFrontHashed++;
+      customer.rrnFront = front;
+      rrnFrontCount++;
     }
 
     if (customer.customerCode) {
@@ -125,7 +123,7 @@ async function main() {
   }
 
   console.log(
-    `\n[완료] 입력 ${inserted}건 / 갱신 ${updated}건 / 미등록 담당자 ${unknownAgent}건 / 주민 암호화 ${rrnBackEnc}건 / 앞 해시 ${rrnFrontHashed}건`,
+    `\n[완료] 입력 ${inserted}건 / 갱신 ${updated}건 / 미등록 담당자 ${unknownAgent}건 / 주민 뒷자리 ${rrnBackCount}건 / 앞자리 ${rrnFrontCount}건`,
   );
   console.log("미등록 담당자가 있으면 scripts/seed.ts에 추가 후 다시 import 하세요.");
 

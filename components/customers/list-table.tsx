@@ -102,7 +102,7 @@ export function ListTable({
               <TableHead>직업</TableHead>
               <TableHead className="w-24 whitespace-nowrap">통화결과</TableHead>
               <TableHead className="w-24 whitespace-nowrap">보험사</TableHead>
-              <TableHead className="w-28 whitespace-nowrap">DB 등록일</TableHead>
+              <TableHead className="w-28 whitespace-nowrap">DB 만기일</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -172,7 +172,7 @@ export function ListTable({
                   </TableCell>
                   <TableCell className="tabular-nums text-sm">
                     <Link href={href} className="block">
-                      {formatDate(c.dbRegisteredAt)}
+                      {formatDate(c.dbEndAt)}
                     </Link>
                   </TableCell>
                 </TableRow>

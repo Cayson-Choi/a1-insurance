@@ -3,7 +3,12 @@ import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import type { SessionUser } from "@/lib/auth/rbac";
-import { hashPII, isValidRrnBack, isValidRrnFront } from "@/lib/crypto/pii";
+function isValidRrnFront(s: string): boolean {
+  return /^\d{6}$/.test(s);
+}
+function isValidRrnBack(s: string): boolean {
+  return /^\d{7}$/.test(s);
+}
 
 export type CustomerFilter = {
   name?: string;
@@ -13,6 +18,8 @@ export type CustomerFilter = {
   agentId?: string;
   rrnFront?: string;
   rrnBack?: string;
+  birthYearFrom?: number;
+  birthYearTo?: number;
   page: number;
   perPage: number;
 };
@@ -54,9 +61,18 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
     agentId: pick("agentId")?.trim() || undefined,
     rrnFront: isValidRrnFront(rrnFrontRaw) ? rrnFrontRaw : undefined,
     rrnBack: isValidRrnBack(rrnBackRaw) ? rrnBackRaw : undefined,
+    birthYearFrom: parseYear(pick("byFrom")),
+    birthYearTo: parseYear(pick("byTo")),
     page: parsePage(pick("page")),
     perPage: parsePerPage(pick("perPage")),
   };
+}
+
+function parseYear(v: unknown): number | undefined {
+  if (typeof v !== "string") return undefined;
+  const n = Number(v.replace(/\D/g, ""));
+  if (!Number.isFinite(n) || n < 1900 || n > 2100) return undefined;
+  return Math.floor(n);
 }
 
 function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
@@ -75,8 +91,14 @@ function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined 
     conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
   }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
-  if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
-  if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));
+  if (filter.rrnFront) conds.push(eq(customers.rrnFront, filter.rrnFront));
+  if (filter.rrnBack) conds.push(eq(customers.rrnBack, filter.rrnBack));
+  if (filter.birthYearFrom !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
+  }
+  if (filter.birthYearTo !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) <= ${filter.birthYearTo}`);
+  }
 
   if (conds.length === 0) return undefined;
   return and(...conds);
@@ -94,7 +116,7 @@ export type ListedCustomer = {
   address: string | null;
   callResult: CallResult | null;
   dbCompany: string | null;
-  dbRegisteredAt: string | null;
+  dbEndAt: string | null;
 };
 
 export type ListResult = {
@@ -131,7 +153,7 @@ export async function listCustomers(
       address: customers.address,
       callResult: customers.callResult,
       dbCompany: customers.dbCompany,
-      dbRegisteredAt: customers.dbRegisteredAt,
+      dbEndAt: customers.dbEndAt,
     })
     .from(customers)
     .leftJoin(users, eq(customers.agentId, users.agentId))

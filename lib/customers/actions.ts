@@ -6,7 +6,6 @@ import { db } from "@/lib/db/client";
 import { customers, auditLogs, users } from "@/lib/db/schema";
 import { requireUser, requireAdmin, getPermissions } from "@/lib/auth/rbac";
 import { UpdateCustomerSchema } from "@/lib/customers/schema";
-import { encryptPII, hashPII, decryptPII } from "@/lib/crypto/pii";
 import {
   getCustomerDetail,
   getDetailContext,
@@ -24,7 +23,7 @@ export async function updateCustomerAction(
 ): Promise<UpdateResult> {
   const user = await requireUser();
   const perms = await getPermissions(user.agentId);
-  const canFullEdit = !!perms?.canManage;
+  const canFullEdit = !!perms?.canEdit;
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = UpdateCustomerSchema.safeParse(raw);
@@ -59,7 +58,7 @@ export async function updateCustomerAction(
     if (!target) return { ok: false, error: "존재하지 않는 담당자ID 입니다." };
   }
 
-  // canManage 있으면 모든 필드, 없으면 방문주소·메모·통화결과만 화이트리스트
+  // canEdit 있으면 모든 필드, 없으면 방문주소·메모·통화결과만 화이트리스트
   const patch: Partial<typeof customers.$inferInsert> = canFullEdit
     ? {
         name: data.name,
@@ -92,18 +91,17 @@ export async function updateCustomerAction(
 
   if (canFullEdit) {
     if (data.rrnFront !== undefined) {
-      patch.rrnFrontHash = data.rrnFront ? hashPII(data.rrnFront) : null;
+      patch.rrnFront = data.rrnFront;
     } else if (data.birthDate !== undefined) {
       if (data.birthDate) {
         const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
-        if (m) patch.rrnFrontHash = hashPII(`${m[1].slice(2)}${m[2]}${m[3]}`);
+        if (m) patch.rrnFront = `${m[1].slice(2)}${m[2]}${m[3]}`;
       } else {
-        patch.rrnFrontHash = null;
+        patch.rrnFront = null;
       }
     }
     if (data.rrnBack !== undefined) {
-      patch.rrnBackHash = data.rrnBack ? hashPII(data.rrnBack) : null;
-      patch.rrnBackEnc = data.rrnBack ? encryptPII(data.rrnBack) : null;
+      patch.rrnBack = data.rrnBack;
     }
     if (user.role === "admin" && data.agentId !== undefined) {
       patch.agentId = data.agentId;
@@ -125,8 +123,8 @@ export async function updateCustomerAction(
     reservationAt: existing.reservationAt?.toISOString() ?? null,
     memo: existing.memo,
     agentId: existing.agentId,
-    rrnFrontSet: !!existing.rrnFrontHash,
-    rrnBackSet: !!existing.rrnBackHash,
+    rrnFront: existing.rrnFront,
+    rrnBack: existing.rrnBack,
   };
   const afterSnapshot = {
     ...beforeSnapshot,
@@ -143,8 +141,8 @@ export async function updateCustomerAction(
       patch.reservationAt instanceof Date ? patch.reservationAt.toISOString() : existing.reservationAt?.toISOString() ?? null,
     memo: patch.memo ?? existing.memo,
     agentId: patch.agentId ?? existing.agentId,
-    rrnFrontSet: patch.rrnFrontHash !== undefined ? !!patch.rrnFrontHash : !!existing.rrnFrontHash,
-    rrnBackSet: patch.rrnBackHash !== undefined ? !!patch.rrnBackHash : !!existing.rrnBackHash,
+    rrnFront: patch.rrnFront ?? existing.rrnFront,
+    rrnBack: patch.rrnBack ?? existing.rrnBack,
   };
 
   await db.insert(auditLogs).values({
@@ -166,8 +164,8 @@ type DeleteResult = { ok: true } | { ok: false; error: string };
 export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
   const user = await requireUser();
   const perms = await getPermissions(user.agentId);
-  if (!perms?.canManage) {
-    return { ok: false, error: "데이터 관리 권한이 없습니다. 관리자에게 문의하세요." };
+  if (!perms?.canDelete) {
+    return { ok: false, error: "삭제 권한이 없습니다. 관리자에게 문의하세요." };
   }
 
   const existing = await db.query.customers.findFirst({
@@ -198,53 +196,7 @@ export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
   return { ok: true };
 }
 
-type RevealResult =
-  | { ok: true; front: string; back: string }
-  | { ok: false; error: string };
-
-/**
- * 관리자가 고객 주민번호를 1회성으로 복호화하여 본다.
- * 반드시 audit_log에 action=rrn_decrypt 로 기록된다.
- */
-export async function revealRrnAction(id: string, reason?: string): Promise<RevealResult> {
-  const actor = await requireAdmin();
-
-  const row = await db.query.customers.findFirst({
-    where: eq(customers.id, id),
-  });
-  if (!row) return { ok: false, error: "고객을 찾을 수 없습니다." };
-
-  if (!row.rrnBackEnc) {
-    return { ok: false, error: "주민번호가 등록되어 있지 않습니다." };
-  }
-
-  let back: string;
-  try {
-    const dec = decryptPII(row.rrnBackEnc);
-    if (!dec) throw new Error("decryption returned null");
-    back = dec;
-  } catch {
-    return { ok: false, error: "복호화에 실패했습니다. 암호화 키를 확인하세요." };
-  }
-
-  // 앞자리는 생년월일에서 파생 (YYMMDD)
-  let front = "??????";
-  if (row.birthDate) {
-    const s = String(row.birthDate);
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-    if (m) front = `${m[1].slice(2)}${m[2]}${m[3]}`;
-  }
-
-  await db.insert(auditLogs).values({
-    actorAgentId: actor.agentId,
-    customerId: id,
-    action: "rrn_decrypt",
-    before: null,
-    after: { customerName: row.name, reason: reason ?? null },
-  });
-
-  return { ok: true, front, back };
-}
+// revealRrnAction 제거 — 주민번호는 평문으로 저장·표시되므로 별도 복호화 불필요
 
 type BulkResult =
   | { ok: true; updated: number; newAgentId: string | null }

@@ -33,7 +33,9 @@ export function UserFormDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [role, setRole] = useState<"admin" | "agent">(user?.role ?? "agent");
-  const [canManage, setCanManage] = useState(user?.canManage ?? false);
+  const [canCreate, setCanCreate] = useState(user?.canCreate ?? false);
+  const [canEdit, setCanEdit] = useState(user?.canEdit ?? false);
+  const [canDelete, setCanDelete] = useState(user?.canDelete ?? false);
   const [canExport, setCanExport] = useState(user?.canExport ?? false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
@@ -41,7 +43,9 @@ export function UserFormDialog({
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("role", role);
-    fd.set("canManage", String(canManage));
+    fd.set("canCreate", String(canCreate));
+    fd.set("canEdit", String(canEdit));
+    fd.set("canDelete", String(canDelete));
     fd.set("canExport", String(canExport));
     setErrors({});
     startTransition(async () => {
@@ -128,10 +132,22 @@ export function UserFormDialog({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <PermCheck
-                    label="데이터 관리 (입력·수정·삭제)"
+                    label="입력 (신규 등록)"
                     disabled={role === "admin"}
-                    checked={role === "admin" || canManage}
-                    onChange={setCanManage}
+                    checked={role === "admin" || canCreate}
+                    onChange={setCanCreate}
+                  />
+                  <PermCheck
+                    label="수정"
+                    disabled={role === "admin"}
+                    checked={role === "admin" || canEdit}
+                    onChange={setCanEdit}
+                  />
+                  <PermCheck
+                    label="삭제"
+                    disabled={role === "admin"}
+                    checked={role === "admin" || canDelete}
+                    onChange={setCanDelete}
                   />
                   <PermCheck
                     label="엑셀 다운로드"

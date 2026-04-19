@@ -35,6 +35,8 @@ export function SearchBar({
   const [agentId, setAgentId] = useState<string>(sp.get("agentId") ?? "");
   const [rrnFront, setRrnFront] = useState<string>(sp.get("rrnFront") ?? "");
   const [rrnBack, setRrnBack] = useState<string>(sp.get("rrnBack") ?? "");
+  const [byFrom, setByFrom] = useState<string>(sp.get("byFrom") ?? "");
+  const [byTo, setByTo] = useState<string>(sp.get("byTo") ?? "");
 
   const firstRenderRef = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,6 +49,8 @@ export function SearchBar({
       const ph = phone.replace(/\D/g, "");
       const rf = rrnFront.replace(/\D/g, "").slice(0, 6);
       const rb = rrnBack.replace(/\D/g, "").slice(0, 7);
+      const yf = byFrom.replace(/\D/g, "").slice(0, 4);
+      const yt = byTo.replace(/\D/g, "").slice(0, 4);
       if (nm) next.set("name", nm);
       if (ad) next.set("addr", ad);
       if (ph) next.set("phone", ph);
@@ -54,6 +58,8 @@ export function SearchBar({
       if (agentId) next.set("agentId", agentId);
       if (rf.length === 6) next.set("rrnFront", rf);
       if (rb.length === 7) next.set("rrnBack", rb);
+      if (yf.length === 4) next.set("byFrom", yf);
+      if (yt.length === 4) next.set("byTo", yt);
       const qs = next.toString();
 
       const run = () => {
@@ -66,7 +72,7 @@ export function SearchBar({
       if (immediate) run();
       else debounceRef.current = setTimeout(run, DEBOUNCE_MS);
     },
-    [name, addr, phone, callResult, agentId, rrnFront, rrnBack, router],
+    [name, addr, phone, callResult, agentId, rrnFront, rrnBack, byFrom, byTo, router],
   );
 
   // 입력 변경 감지 → 자동 검색 (텍스트는 debounce, 드롭다운은 즉시)
@@ -79,7 +85,7 @@ export function SearchBar({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [name, addr, phone, rrnFront, rrnBack, commit]);
+  }, [name, addr, phone, rrnFront, rrnBack, byFrom, byTo, commit]);
 
   useEffect(() => {
     if (firstRenderRef.current) return;
@@ -95,6 +101,8 @@ export function SearchBar({
     setAgentId("");
     setRrnFront("");
     setRrnBack("");
+    setByFrom("");
+    setByTo("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     startTransition(() => {
       router.push("/customers");
@@ -102,11 +110,11 @@ export function SearchBar({
   }
 
   const hasFilter =
-    !!name || !!addr || !!phone || !!callResult || !!agentId || !!rrnFront || !!rrnBack;
+    !!name || !!addr || !!phone || !!callResult || !!agentId || !!rrnFront || !!rrnBack || !!byFrom || !!byTo;
 
   return (
     <div className="flex flex-wrap items-end gap-2 md:gap-3 rounded-lg border bg-card p-3 md:p-4 shadow-sm">
-      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-48">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
         <Label htmlFor="f-name" className="text-xs text-muted-foreground">
           이름
         </Label>
@@ -117,7 +125,7 @@ export function SearchBar({
           className="h-9"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-64">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-52">
         <Label htmlFor="f-addr" className="text-xs text-muted-foreground">
           주소
         </Label>
@@ -128,7 +136,7 @@ export function SearchBar({
           className="h-9"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-40">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-32">
         <Label htmlFor="f-phone" className="text-xs text-muted-foreground">
           전화번호
         </Label>
@@ -141,7 +149,7 @@ export function SearchBar({
           autoComplete="off"
         />
       </div>
-      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-28">
         <Label className="text-xs text-muted-foreground">통화결과</Label>
         <Select
           value={callResult || ALL}
@@ -161,7 +169,7 @@ export function SearchBar({
         </Select>
       </div>
       {showAgentFilter ? (
-        <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-44">
+        <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-36">
           <Label className="text-xs text-muted-foreground">담당자</Label>
           <Select
             value={agentId || ALL}
@@ -213,14 +221,42 @@ export function SearchBar({
           autoComplete="off"
         />
       </div>
+      <div className="flex flex-col gap-1.5 w-[calc(50%-0.25rem)] md:w-40">
+        <Label className="text-xs text-muted-foreground">출생연도 범위</Label>
+        <div className="flex items-center gap-1">
+          <Input
+            id="f-by-from"
+            value={byFrom}
+            onChange={(e) => setByFrom(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="1960"
+            className="h-9 font-mono tabular-nums"
+            autoComplete="off"
+            aria-label="출생연도 시작"
+          />
+          <span className="text-muted-foreground text-xs shrink-0">~</span>
+          <Input
+            id="f-by-to"
+            value={byTo}
+            onChange={(e) => setByTo(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="1970"
+            className="h-9 font-mono tabular-nums"
+            autoComplete="off"
+            aria-label="출생연도 종료"
+          />
+        </div>
+      </div>
 
-      <div className="flex items-end gap-2 ml-auto">
+      <div className="flex items-end gap-1">
         <div
-          className={`flex items-center gap-1.5 h-9 px-2 text-xs text-muted-foreground transition-opacity ${pending ? "opacity-100" : "opacity-0"}`}
+          className={`flex items-center justify-center h-9 w-6 text-muted-foreground transition-opacity ${pending ? "opacity-100" : "opacity-0"}`}
           aria-live="polite"
+          aria-label={pending ? "검색 중" : undefined}
         >
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          검색 중…
+          <Loader2 className="h-4 w-4 animate-spin" />
         </div>
         <Button
           type="button"

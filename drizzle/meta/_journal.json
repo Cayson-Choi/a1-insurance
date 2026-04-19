@@ -29,6 +29,20 @@
       "when": 1776600000000,
       "tag": "0003_unify_manage_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776700000000,
+      "tag": "0004_rrn_plaintext",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776800000000,
+      "tag": "0005_split_manage_permission",
+      "breakpoints": true
     }
   ]
 }

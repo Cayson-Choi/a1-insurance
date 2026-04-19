@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
-import { RrnRevealButton } from "@/components/customers/rrn-reveal-button";
 import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { CALL_RESULTS } from "@/lib/excel/column-map";
 import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
@@ -44,16 +43,46 @@ function toDateTimeLocal(v: string | Date | null | undefined): string {
   return `${yy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
+const FS_UNSAFE = /[\\/:*?"<>|\s]+/g;
+
+function sanitizeForFilename(s: string): string {
+  return s.replace(FS_UNSAFE, "");
+}
+
+function birthYY(birthDate: string): string {
+  const m = /^(\d{4})/.exec(birthDate);
+  return m ? m[1].slice(2) : "";
+}
+
+// 첫 두 토큰(시·도 + 시·군·구)을 결합. "시"·"군"·"구" 접미사는 제거.
+// 예) "충북 청주시 흥덕구 …" → "충북청주", "서울특별시 강남구 …" → "서울강남"
+function simpleAddress(addr: string): string {
+  if (!addr) return "";
+  const tokens = addr.trim().split(/\s+/);
+  const stripSuffix = (t: string) =>
+    t.replace(/(특별시|광역시|특별자치시|특별자치도|시|군|구)$/u, "");
+  const region = stripSuffix(tokens[0] ?? "");
+  const area = stripSuffix(tokens[1] ?? "");
+  return region + area;
+}
+
+function buildImageFilename(name: string, birthDate: string, address: string): string {
+  const safeName = sanitizeForFilename(name) || "고객";
+  const yy = birthYY(birthDate);
+  const addr = sanitizeForFilename(simpleAddress(address));
+  return `${safeName}${yy}${addr}.png`;
+}
+
 type Props = {
   customer: CustomerDetail;
   agents: Array<{ agentId: string; name: string }>;
   canEdit: boolean;
   canDelete: boolean;
   canEditAgent: boolean;
-  canRevealRrn: boolean;
   prevHref: string | null;
   nextHref: string | null;
   closeHref: string;
+  currentUserName: string;
   onClose?: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -67,10 +96,10 @@ export function DetailForm({
   canEdit,
   canDelete,
   canEditAgent,
-  canRevealRrn,
   prevHref,
   nextHref,
   closeHref,
+  currentUserName,
   onClose,
   onPrev,
   onNext,
@@ -101,7 +130,12 @@ export function DetailForm({
     else if (nextHref) router.push(nextHref);
   }
 
-  async function submit(formData: FormData) {
+  // React 19의 <form action={fn}> 은 성공 시 uncontrolled 입력을 defaultValue로 자동 리셋한다.
+  // 사용자가 비운 값(예: 메모)이 저장은 되지만 화면에선 원래 값으로 되돌아가는 문제를 막기 위해
+  // onSubmit + preventDefault로 처리한다.
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     setFieldErrors({});
     startTransition(async () => {
       const res = await updateCustomerAction(customer.id, formData);
@@ -111,9 +145,6 @@ export function DetailForm({
         return;
       }
       toast.success("고객 정보가 저장되었습니다.");
-      if (onSaved) {
-        // 내부 state를 최신 DB 값으로 갱신하고 싶으면 모달 측에서 처리
-      }
       router.refresh();
     });
   }
@@ -135,6 +166,31 @@ export function DetailForm({
     } catch {
       toast.error("클립보드 접근이 차단되어 복사하지 못했습니다.");
     }
+  }
+
+  function insertMemoStamp(e: React.MouseEvent<HTMLTextAreaElement>) {
+    e.preventDefault();
+    const ta = e.currentTarget;
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mi = String(now.getMinutes()).padStart(2, "0");
+    const stamp = `${yyyy}.${mm}.${dd} ${hh}:${mi} (${currentUserName}) : `;
+
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    // 직전이 줄 끝이 아니면 자동 줄바꿈으로 구분
+    const needsBreak = before.length > 0 && !before.endsWith("\n");
+    const insert = (needsBreak ? "\n" : "") + stamp;
+
+    ta.value = before + insert + after;
+    const caret = (before + insert).length;
+    ta.selectionStart = ta.selectionEnd = caret;
+    ta.focus();
   }
 
   function callPhone() {
@@ -165,11 +221,14 @@ export function DetailForm({
         backgroundColor: "#ffffff",
         cacheBust: true,
       });
-      const now = new Date();
-      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+      const fd = formRef.current ? new FormData(formRef.current) : null;
+      const name = String(fd?.get("name") ?? customer.name ?? "").trim();
+      const birthDate = String(fd?.get("birthDate") ?? toDateInput(customer.birthDate)).trim();
+      const address = String(fd?.get("address") ?? customer.address ?? "").trim();
+      const filename = buildImageFilename(name, birthDate, address);
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `${customer.name}_${ts}.png`;
+      a.download = filename;
       a.click();
       toast.success("이미지가 저장되었습니다.");
     } catch (e) {
@@ -240,7 +299,13 @@ export function DetailForm({
       )}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 border-b bg-sidebar/60 px-3 md:px-4 py-2 md:py-3 overflow-x-auto">
+      <div
+        data-drag-handle={variant === "modal" ? "" : undefined}
+        className={cn(
+          "flex items-center justify-between gap-2 border-b bg-sidebar/60 px-3 md:px-4 py-2 md:py-3 overflow-x-auto",
+          variant === "modal" && "md:cursor-move md:select-none",
+        )}
+      >
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
           <Button
             type="button"
@@ -333,7 +398,7 @@ export function DetailForm({
       >
         <form
           ref={formRef}
-          action={submit}
+          onSubmit={handleSubmit}
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
           {/* Left: 기본 정보 */}
@@ -424,34 +489,10 @@ export function DetailForm({
                   disabled={!canEdit}
                 />
               </Field>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  주민번호 등록 상태
-                </Label>
-                <div className="flex h-10 items-center gap-1.5 overflow-x-auto rounded-md border bg-muted/30 px-2 text-sm">
-                  <StatusPill ok={!!customer.rrnFrontHash} label={customer.rrnFrontHash ? "앞 등록" : "앞 미등록"} />
-                  <StatusPill ok={!!customer.rrnBackHash} label={customer.rrnBackHash ? "뒤 등록" : "뒤 미등록"} />
-                  {canRevealRrn ? (
-                    <div className="ml-auto shrink-0">
-                      <RrnRevealButton
-                        customerId={customer.id}
-                        hasRrn={customer.hasRrnBack}
-                        customerName={customer.name}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  저장값은 암호화·해시되어 보관됩니다. 입력창은 빈 값으로만 표시돼요.
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
               <Field label="주민번호 앞자리 (6)" error={err("rrnFront")}>
                 <Input
                   name="rrnFront"
-                  defaultValue=""
+                  defaultValue={customer.rrnFront ?? ""}
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="예: 901201"
@@ -460,10 +501,13 @@ export function DetailForm({
                   disabled={!canEdit}
                 />
               </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <Field label="주민번호 뒷자리 (7)" error={err("rrnBack")}>
                 <Input
                   name="rrnBack"
-                  defaultValue=""
+                  defaultValue={customer.rrnBack ?? ""}
                   inputMode="numeric"
                   maxLength={7}
                   placeholder="예: 1234567"
@@ -472,6 +516,7 @@ export function DetailForm({
                   disabled={!canEdit}
                 />
               </Field>
+              <div />
             </div>
 
             <Field label="연락처" error={err("phone1")}>
@@ -599,11 +644,11 @@ export function DetailForm({
                   disabled={!canEdit}
                 />
               </Field>
-              <Field label="예약일시" error={err("reservationAt")}>
+              <Field label="DB 만기일" error={err("dbEndAt")}>
                 <Input
-                  type="datetime-local"
-                  name="reservationAt"
-                  defaultValue={toDateTimeLocal(customer.reservationAt)}
+                  type="date"
+                  name="dbEndAt"
+                  defaultValue={toDateInput(customer.dbEndAt)}
                   className="h-10 tabular-nums"
                   disabled={!canEdit}
                 />
@@ -633,32 +678,26 @@ export function DetailForm({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="DB 등록일" error={err("dbRegisteredAt")}>
+              <Field label="예약일시" error={err("reservationAt")}>
                 <Input
-                  type="date"
-                  name="dbRegisteredAt"
-                  defaultValue={toDateInput(customer.dbRegisteredAt)}
+                  type="datetime-local"
+                  name="reservationAt"
+                  defaultValue={toDateTimeLocal(customer.reservationAt)}
                   className="h-10 tabular-nums"
                   disabled={!canEdit}
                 />
               </Field>
-              <Field label="DB 만기일" error={err("dbEndAt")}>
-                <Input
-                  type="date"
-                  name="dbEndAt"
-                  defaultValue={toDateInput(customer.dbEndAt)}
-                  className="h-10 tabular-nums"
-                  disabled={!canEdit}
-                />
-              </Field>
+              <div />
             </div>
 
             <Field label="메모" error={err("memo")}>
               <Textarea
                 name="memo"
                 defaultValue={customer.memo ?? ""}
-                rows={4}
-                placeholder="상담 내용, 특이사항 등을 입력하세요."
+                rows={12}
+                placeholder="상담 내용, 특이사항 등을 입력하세요. (마우스 오른쪽 클릭: 일시·담당자 자동 입력)"
+                onContextMenu={insertMemoStamp}
+                className="min-h-[260px]"
               />
             </Field>
 
@@ -721,17 +760,3 @@ function ReadOnly({
   );
 }
 
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        ok
-          ? "bg-brand/15 text-[#155e75] border-brand/30"
-          : "bg-muted text-muted-foreground border-border",
-      )}
-    >
-      {label}
-    </span>
-  );
-}

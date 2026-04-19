@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Download, FileSpreadsheet } from "lucide-react";
-import { requireAdmin } from "@/lib/auth/rbac";
+import { redirect } from "next/navigation";
+import { requireUserWithPerms } from "@/lib/auth/rbac";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExcelUploader } from "@/components/admin/excel-uploader";
 
@@ -10,7 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminExcelPage() {
-  await requireAdmin();
+  const me = await requireUserWithPerms();
+  if (me.role !== "admin" && !me.canCreate) redirect("/customers");
 
   return (
     <div className="space-y-5">
@@ -50,7 +52,6 @@ export default async function AdminExcelPage() {
           <CardContent className="space-y-3">
             <div className="text-sm text-muted-foreground space-y-1.5">
               <div>• 헤더: 고객코드No, 담당자, 이름 등 <b>28컬럼</b></div>
-              <div>• 주민번호는 개인정보 보호를 위해 <b>마스킹</b>되어 내려갑니다</div>
               <div>• 정렬 기준: DB 등록일 내림차순</div>
             </div>
             <div className="flex gap-2 pt-2">

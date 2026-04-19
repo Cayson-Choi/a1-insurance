@@ -4,13 +4,9 @@ import { customers, users, type Customer } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import type { SessionUser } from "@/lib/auth/rbac";
 import { parseFilter, type CustomerFilter } from "@/lib/customers/queries";
-import { hashPII } from "@/lib/crypto/pii";
 
-// 클라이언트 컴포넌트로 전달되는 형태 — Uint8Array(bytea)는 직렬화 불가하므로
-// 원문 대신 존재 여부만 노출한다.
-export type CustomerDetail = Omit<Customer, "rrnBackEnc"> & {
+export type CustomerDetail = Customer & {
   agentName: string | null;
-  hasRrnBack: boolean;
 };
 
 export type DetailContext = {
@@ -39,8 +35,14 @@ function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined 
     conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
   }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
-  if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
-  if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));
+  if (filter.rrnFront) conds.push(eq(customers.rrnFront, filter.rrnFront));
+  if (filter.rrnBack) conds.push(eq(customers.rrnBack, filter.rrnBack));
+  if (filter.birthYearFrom !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
+  }
+  if (filter.birthYearTo !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) <= ${filter.birthYearTo}`);
+  }
   return conds.length ? and(...conds) : undefined;
 }
 
@@ -62,12 +64,9 @@ export async function getCustomerDetail(
   if (!row) return null;
   if (user.role === "agent" && row.customer.agentId !== user.agentId) return null;
 
-  // rrnBackEnc(Uint8Array)은 클라이언트로 넘기지 않고 존재 여부만 노출
-  const { rrnBackEnc, ...rest } = row.customer;
   return {
-    ...rest,
+    ...row.customer,
     agentName: row.agentName,
-    hasRrnBack: !!rrnBackEnc,
   };
 }
 

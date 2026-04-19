@@ -21,14 +21,18 @@ export const CreateUserSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   role: z.enum(["admin", "agent"]),
   password: PasswordSchema,
-  canManage: boolFlag,
+  canCreate: boolFlag,
+  canEdit: boolFlag,
+  canDelete: boolFlag,
   canExport: boolFlag,
 });
 
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   role: z.enum(["admin", "agent"]),
-  canManage: boolFlag,
+  canCreate: boolFlag,
+  canEdit: boolFlag,
+  canDelete: boolFlag,
   canExport: boolFlag,
 });
 

@@ -68,8 +68,10 @@ export function UserTable({
                     <span className="text-xs text-muted-foreground">전체 권한</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
-                      <PermBadge label="데이터 관리" on={u.canManage} />
-                      <PermBadge label="엑셀 다운로드" on={u.canExport} />
+                      <PermBadge label="입력" on={u.canCreate} />
+                      <PermBadge label="수정" on={u.canEdit} />
+                      <PermBadge label="삭제" on={u.canDelete} />
+                      <PermBadge label="엑셀" on={u.canExport} />
                     </div>
                   )}
                 </TableCell>

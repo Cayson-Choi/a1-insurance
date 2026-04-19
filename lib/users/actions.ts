@@ -56,7 +56,9 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
     name: d.name,
     role: d.role,
     passwordHash,
-    canManage: d.canManage,
+    canCreate: d.canCreate,
+    canEdit: d.canEdit,
+    canDelete: d.canDelete,
     canExport: d.canExport,
   });
 
@@ -94,7 +96,9 @@ export async function updateUserAction(
     .set({
       name: d.name,
       role: d.role,
-      canManage: d.canManage,
+      canCreate: d.canCreate,
+      canEdit: d.canEdit,
+      canDelete: d.canDelete,
       canExport: d.canExport,
     })
     .where(eq(users.agentId, agentId));

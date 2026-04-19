@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
-import { requireAdmin, ForbiddenError } from "@/lib/auth/rbac";
+import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseCustomersWorkbook } from "@/lib/excel/importer";
-import { encryptPII, hashPII } from "@/lib/crypto/pii";
 import { birthDateToFrontYymmdd, extractRrnBackRaw } from "@/lib/excel/column-map";
 import type { NewCustomer } from "@/lib/db/schema";
 
@@ -12,13 +11,13 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  try {
-    await requireAdmin();
-  } catch (e) {
-    if (e instanceof ForbiddenError) {
-      return NextResponse.json({ error: e.message }, { status: 403 });
-    }
-    throw e;
+  const me = await requireUser();
+  const perms = await getPermissions(me.agentId);
+  if (!perms?.canCreate) {
+    return NextResponse.json(
+      { error: "신규 등록(엑셀 업로드) 권한이 없습니다. 관리자에게 문의하세요." },
+      { status: 403 },
+    );
   }
 
   const mode = req.nextUrl.searchParams.get("mode") ?? "preview";
@@ -88,26 +87,25 @@ export async function POST(req: NextRequest) {
   // apply — 오류 있는 행은 건너뜀, 미등록 담당자는 null 처리
   let inserted = 0;
   let updated = 0;
-  let rrnBackEncrypted = 0;
-  let rrnFrontHashed = 0;
+  let rrnBackCount = 0;
+  let rrnFrontCount = 0;
 
   for (const row of parsed.rows) {
     if (!row.customer.name || row.customer.name === "이름없음") continue;
     const c: Partial<NewCustomer> & typeof row.customer = { ...row.customer };
     if (c.agentId && !validAgentIds.has(c.agentId)) c.agentId = null;
 
-    // 주민번호 뒷자리 암호화 + 해시
+    // 주민번호 뒷자리 평문 저장
     const rrnBack = extractRrnBackRaw(row.raw);
     if (rrnBack) {
-      c.rrnBackEnc = encryptPII(rrnBack);
-      c.rrnBackHash = hashPII(rrnBack);
-      rrnBackEncrypted++;
+      c.rrnBack = rrnBack;
+      rrnBackCount++;
     }
-    // 주민번호 앞자리 해시 (생년월일에서 파생, YYMMDD)
+    // 주민번호 앞자리 평문 저장 (생년월일에서 파생, YYMMDD)
     const front = birthDateToFrontYymmdd(row.customer.birthDate ?? null);
     if (front) {
-      c.rrnFrontHash = hashPII(front);
-      rrnFrontHashed++;
+      c.rrnFront = front;
+      rrnFrontCount++;
     }
 
     // 1순위: customer_code
@@ -154,7 +152,7 @@ export async function POST(req: NextRequest) {
     skipped: parsed.total - inserted - updated,
     invalidCount,
     unknownAgentCount,
-    rrnBackEncrypted,
-    rrnFrontHashed,
+    rrnBackCount,
+    rrnFrontCount,
   });
 }

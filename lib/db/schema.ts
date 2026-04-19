@@ -48,8 +48,9 @@ export const users = pgTable(
     name: varchar("name", { length: 60 }).notNull(),
     role: roleEnum("role").notNull().default("agent"),
     // 담당자별 권한 — agent role만 해당. admin은 항상 모든 권한 보유
-    // canManage: 데이터 입력·수정·삭제 통합 권한
-    canManage: boolean("can_manage").notNull().default(false),
+    canCreate: boolean("can_create").notNull().default(false),
+    canEdit: boolean("can_edit").notNull().default(false),
+    canDelete: boolean("can_delete").notNull().default(false),
     canExport: boolean("can_export").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -68,9 +69,8 @@ export const customers = pgTable(
       .references(() => users.agentId, { onDelete: "set null" }),
     name: varchar("name", { length: 60 }).notNull(),
     birthDate: date("birth_date"),
-    rrnFrontHash: varchar("rrn_front_hash", { length: 64 }),
-    rrnBackEnc: bytea("rrn_back_enc"),
-    rrnBackHash: varchar("rrn_back_hash", { length: 64 }),
+    rrnFront: varchar("rrn_front", { length: 6 }),
+    rrnBack: varchar("rrn_back", { length: 7 }),
     phone1: varchar("phone1", { length: 30 }),
     job: text("job"),
     address: text("address"),
@@ -103,8 +103,8 @@ export const customers = pgTable(
   (t) => [
     index("customers_agent_id_idx").on(t.agentId),
     index("customers_name_idx").on(t.name),
-    index("customers_rrn_front_hash_idx").on(t.rrnFrontHash),
-    index("customers_rrn_back_hash_idx").on(t.rrnBackHash),
+    index("customers_rrn_front_idx").on(t.rrnFront),
+    index("customers_rrn_back_idx").on(t.rrnBack),
     index("customers_db_registered_idx").on(t.dbRegisteredAt),
     index("customers_call_result_idx").on(t.callResult),
   ],

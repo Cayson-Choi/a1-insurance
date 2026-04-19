@@ -4,7 +4,6 @@ import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
 import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseFilter } from "@/lib/customers/queries";
-import { hashPII } from "@/lib/crypto/pii";
 import { buildCustomersWorkbook, type ExportRow } from "@/lib/excel/exporter";
 
 export const runtime = "nodejs";
@@ -30,8 +29,14 @@ export async function GET(req: NextRequest) {
     conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
   }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
-  if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, hashPII(filter.rrnFront)));
-  if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, hashPII(filter.rrnBack)));
+  if (filter.rrnFront) conds.push(eq(customers.rrnFront, filter.rrnFront));
+  if (filter.rrnBack) conds.push(eq(customers.rrnBack, filter.rrnBack));
+  if (filter.birthYearFrom !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
+  }
+  if (filter.birthYearTo !== undefined) {
+    conds.push(sql`extract(year from ${customers.birthDate}) <= ${filter.birthYearTo}`);
+  }
 
   const rows = await db
     .select({

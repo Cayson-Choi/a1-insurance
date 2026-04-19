@@ -7,7 +7,7 @@ const HEADER_ORDER: Array<[keyof typeof EXCEL_HEADERS, number]> = [
   ["agentName", 10],
   ["name", 10],
   ["birthDate", 12],
-  ["rrnFrontRaw", 10],
+  ["rrnFrontRaw", 16],
   ["phone1", 16],
   ["job", 30],
   ["address", 30],
@@ -77,7 +77,7 @@ export async function buildCustomersWorkbook(
   headerRow.fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FFF7941D" },
+    fgColor: { argb: "FF0891B2" },
   };
   headerRow.alignment = { vertical: "middle", horizontal: "center" };
   headerRow.height = 24;
@@ -88,7 +88,7 @@ export async function buildCustomersWorkbook(
       agentName: r.agentName ?? "",
       name: r.name,
       birthDate: toDateStr(r.birthDate),
-      rrnFrontRaw: r.rrnFrontHash ? "******" : "",
+      rrnFrontRaw: r.rrnFront && r.rrnBack ? `${r.rrnFront}-${r.rrnBack}` : (r.rrnBack ?? r.rrnFront ?? ""),
       phone1: r.phone1 ?? "",
       job: r.job ?? "",
       address: r.address ?? "",
