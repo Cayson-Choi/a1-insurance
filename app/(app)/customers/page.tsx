@@ -73,6 +73,8 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         canUnmaskPhone={true}
         canBulkEdit={isAdmin}
         agents={agents}
+        sort={filter.sort ?? null}
+        dir={filter.dir ?? "asc"}
       />
 
       <Suspense>

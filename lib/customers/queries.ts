@@ -1,8 +1,9 @@
-import { and, desc, eq, ilike, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import type { SessionUser } from "@/lib/auth/rbac";
+import { isSortDir, isSortKey, type SortDir, type SortKey } from "@/lib/customers/columns";
 function isValidRrnFront(s: string): boolean {
   return /^\d{6}$/.test(s);
 }
@@ -20,6 +21,8 @@ export type CustomerFilter = {
   rrnBack?: string;
   birthYearFrom?: number;
   birthYearTo?: number;
+  sort?: SortKey;
+  dir?: SortDir;
   page: number;
   perPage: number;
 };
@@ -53,6 +56,8 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
   const rrnFrontRaw = pick("rrnFront")?.replace(/\D/g, "") ?? "";
   const rrnBackRaw = pick("rrnBack")?.replace(/\D/g, "") ?? "";
   const phoneRaw = pick("phone")?.replace(/\D/g, "") ?? "";
+  const sortRaw = pick("sort");
+  const dirRaw = pick("dir");
   return {
     name: pick("name")?.trim() || undefined,
     address: pick("addr")?.trim() || undefined,
@@ -63,6 +68,8 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
     rrnBack: isValidRrnBack(rrnBackRaw) ? rrnBackRaw : undefined,
     birthYearFrom: parseYear(pick("byFrom")),
     birthYearTo: parseYear(pick("byTo")),
+    sort: isSortKey(sortRaw) ? sortRaw : undefined,
+    dir: isSortDir(dirRaw) ? dirRaw : undefined,
     page: parsePage(pick("page")),
     perPage: parsePerPage(pick("perPage")),
   };
@@ -73,6 +80,38 @@ function parseYear(v: unknown): number | undefined {
   const n = Number(v.replace(/\D/g, ""));
   if (!Number.isFinite(n) || n < 1900 || n > 2100) return undefined;
   return Math.floor(n);
+}
+
+function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[] {
+  // 기본: DB 등록일 → createdAt 내림차순
+  if (!sort) {
+    return [desc(customers.dbRegisteredAt), desc(customers.createdAt)];
+  }
+  const direction = dir === "asc" ? asc : desc;
+  // 컬럼 매핑 — 사용자 정렬 후 안정적인 tie-breaker로 createdAt DESC 추가
+  const target = (() => {
+    switch (sort) {
+      case "agentName":
+        return users.name;
+      case "name":
+        return customers.name;
+      case "phone1":
+        return customers.phone1;
+      case "birthDate":
+        return customers.birthDate;
+      case "address":
+        return customers.address;
+      case "job":
+        return customers.job;
+      case "callResult":
+        return customers.callResult;
+      case "dbCompany":
+        return customers.dbCompany;
+      case "dbEndAt":
+        return customers.dbEndAt;
+    }
+  })();
+  return [direction(target), desc(customers.createdAt)];
 }
 
 function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
@@ -139,6 +178,7 @@ export async function listCustomers(
     .where(where ?? sql`true`);
 
   const offset = (filter.page - 1) * filter.perPage;
+  const orderBy = buildOrderBy(filter.sort, filter.dir);
 
   const rows = await db
     .select({
@@ -158,7 +198,7 @@ export async function listCustomers(
     .from(customers)
     .leftJoin(users, eq(customers.agentId, users.agentId))
     .where(where ?? sql`true`)
-    .orderBy(desc(customers.dbRegisteredAt), desc(customers.createdAt))
+    .orderBy(...orderBy)
     .limit(filter.perPage)
     .offset(offset);
 
