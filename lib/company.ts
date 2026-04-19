@@ -1,8 +1,8 @@
 export const COMPANY = {
-  nameKo: "JG-ORM",
-  nameEn: "JG-ORM",
+  nameKo: "JK-CRM",
+  nameEn: "JK-CRM",
   tagline: "Customer & Data Management",
   slogan: "고객·데이터를 한 곳에서",
-  appName: "JG-ORM 고객·데이터 관리",
-  appNameShort: "JG-ORM",
+  appName: "JK-CRM 고객·데이터 관리",
+  appNameShort: "JK-CRM",
 } as const;
