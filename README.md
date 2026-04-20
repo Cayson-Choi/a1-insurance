@@ -10,13 +10,17 @@
 ## 주요 기능
 
 - **인증 / 권한**: Auth.js v5 Credentials, JWT 8h 세션, 유휴 30분 자동 로그아웃. 관리자(admin) + 담당자(agent, 권한 4종 `canCreate`·`canEdit`·`canDelete`·`canExport` 조합)
-- **고객 관리**: 자동 검색(이름·주소·전화 substring·주민번호 앞/뒤·통화결과·담당자·출생연도 범위), 페이지네이션, 통화결과 컬러 배지
-- **팝업 상세**: Intercepting Route 무깜빡 모달, 이전/다음, 단축키, 전화 걸기(`tel:`) · 복사 · 이미지 저장(`{이름}{년생2자리}{간단주소}.png`), 메모 우클릭 → 일시·담당자 자동 삽입
-- **드래그·UX**: 데스크톱 팝업 헤더 드래그로 위치 이동, 백드롭 투명, 메모 영역 확대
+- **고객 목록 테이블 (28컬럼)**: 엑셀 고객명부와 1:1 매칭. **컬럼 헤더 클릭 정렬** (URL 쿼리 저장) · **드래그로 순서 재배치** (localStorage) · **Excel 방식 경계 리사이즈** (두 인접 컬럼 제로섬) · "컬럼 초기화" 버튼
+- **자동 검색**: 이름·주소·전화 substring·주민번호 앞/뒤·통화결과·담당자·출생연도 범위 — 복합 AND, 텍스트는 400ms 디바운스
+- **팝업 상세**: Intercepting Route 무깜빡 모달, 이전/다음, 단축키, 전화 걸기(`tel:`) · 복사 · 이미지 저장(`{이름}{년생2자리}{간단주소}.png`), 메모 우클릭 → 일시·담당자 자동 삽입, 데스크톱 드래그 이동
 - **엑셀 I/O**: 28컬럼 import/export, 평문 주민번호 처리, 중복 방지(고객코드No 또는 name+phone fallback)
-- **관리자**: 사용자 CRUD + 비밀번호 재설정, 담당자별 권한 4종 체크박스, 담당자 일괄 변경, 변경 이력 뷰어, 고객 삭제(canDelete 권한)
+- **로그인 알림**: Slack / Telegram 병행 발송 (구성된 채널만 자동 선택) — 성공·실패·강제 로그아웃 실시간 전송
+- **강제 로그아웃**: `users.sessions_invalidated_at` 컬럼 기반, 관리자가 해당 사용자를 다음 요청 시점에 자동 로그아웃
+- **접속 상태**: `last_seen_at` 1분 throttle 갱신, 5분 이내 활동 → 🟢 접속 중 표시
+- **로그인 이력**: `/admin/logins` — 성공·실패 전체 감사 로그 (필터·페이지네이션)
+- **관리자**: 사용자 CRUD + 비밀번호 재설정, 권한 4종 체크박스, 담당자 일괄 변경, 변경 이력 뷰어
 - **모바일**: 햄버거 메뉴, 테이블 가로 스크롤, 팝업 풀스크린, 검색바 2열 그리드
-- **브랜드**: DB-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트
+- **브랜드**: DB-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트, OG 이미지(카톡·링크 프리뷰)
 
 ---
 
@@ -27,6 +31,7 @@
 | 프레임워크 | Next.js 16 (App Router, Turbopack) |
 | 언어 | TypeScript |
 | UI | Tailwind CSS v4 + shadcn/ui (Base UI primitives) |
+| 테이블 DnD | `@dnd-kit/core` + `@dnd-kit/sortable` |
 | 폰트 | Pretendard Variable (CDN) |
 | 인증 | Auth.js v5 Credentials (JWT 세션, 8시간) |
 | 비밀번호 | bcryptjs 12 round |
@@ -34,6 +39,7 @@
 | DB | PostgreSQL (Neon serverless) |
 | 엑셀 | exceljs |
 | 이미지 저장 | html-to-image |
+| 알림 | Slack Incoming Webhooks · Telegram Bot API |
 | 배포 | Vercel |
 
 ---
@@ -59,19 +65,31 @@ pnpm install
 `.env.local` 파일 생성:
 
 ```env
-# Neon Postgres connection string (Pooled 권장)
+# [필수] Neon Postgres connection string (Pooled 권장)
 DATABASE_URL=postgres://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
 
-# 세션 서명용 (48바이트 base64)
+# [필수] 세션 서명용 (48바이트 base64)
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 AUTH_SECRET=
+
+# [선택] 링크 프리뷰용 절대 URL (미설정 시 Vercel URL 자동 감지, 로컬 fallback: localhost:3000)
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+
+# [선택] Slack 로그인 알림 — Incoming Webhook URL
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
+
+# [선택] Telegram 로그인 알림 — 두 값 모두 설정돼야 동작
+TELEGRAM_BOT_TOKEN=12345:ABC...
+TELEGRAM_CHAT_ID=123456789
 ```
+
+> Slack·Telegram 중 하나만 있어도 되고, 둘 다 있으면 양쪽 모두에 알림 발송. 둘 다 없으면 알림만 조용히 skip되고 다른 기능은 정상 동작.
 
 ### 3. 데이터베이스 마이그레이션
 
 ```bash
 pnpm db:generate     # 스키마 변경 시 SQL 생성 (초기 구축 시 이미 포함)
-pnpm db:migrate      # Neon에 스키마 적용
+pnpm db:migrate      # Neon에 스키마 적용 (마이그 0000–0006)
 pnpm db:seed         # 초기 사용자 시드 (admin + 샘플 담당자 7명)
 pnpm db:import-xlsx  # material/고객명부.xlsx 를 DB로 import
 ```
@@ -111,9 +129,13 @@ Vercel 프로젝트 → **Storage** 탭 → **Add Integration** → **Neon** →
 
 Vercel 프로젝트 → Settings → Environment Variables. `Production` + `Preview` 환경에 등록:
 
-| Key | 값 |
-|---|---|
-| `AUTH_SECRET` | 로컬 `.env.local`에서 복사 |
+| Key | 값 | 비고 |
+|---|---|---|
+| `AUTH_SECRET` | 로컬 `.env.local`에서 복사 | 필수 |
+| `NEXT_PUBLIC_SITE_URL` | 운영 도메인 | OG 이미지·링크 프리뷰용 |
+| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook | 선택 |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot 토큰 | 선택 (chat_id와 세트) |
+| `TELEGRAM_CHAT_ID` | Telegram chat_id | 선택 (bot_token과 세트) |
 
 (`DATABASE_URL`은 Neon 통합이 자동 주입)
 
@@ -121,6 +143,8 @@ Vercel 프로젝트 → Settings → Environment Variables. `Production` + `Prev
 
 - `main` 브랜치에 푸시하면 자동 Production 배포
 - Preview URL에서 `admin / admin1234` 로그인 → 정상 확인 후 **관리자 비밀번호 즉시 변경**
+
+> ⚠ **환경변수 추가·변경 후 자동 재배포되지 않습니다**. Vercel 대시보드 → Deployments → 최신 배포 우측 ⋯ → **Redeploy** 클릭 필요.
 
 ### 5. CLI 대안 (선택)
 
@@ -146,7 +170,7 @@ pnpm start            # Production server (빌드된 결과)
 pnpm lint             # ESLint
 
 pnpm db:generate      # Drizzle 스키마 변경 → SQL 파일 생성
-pnpm db:migrate       # 저장된 SQL 파일을 DB에 적용
+pnpm db:migrate       # 저장된 SQL 파일을 DB에 적용 (0000–0006)
 pnpm db:studio        # Drizzle Studio (DB GUI)
 pnpm db:seed          # 초기 사용자 시드
 pnpm db:import-xlsx   # material/고객명부.xlsx 일괄 import
@@ -158,39 +182,65 @@ pnpm db:import-xlsx   # material/고객명부.xlsx 일괄 import
 
 ```
 app/
-  (auth)/login/                  로그인 (DB-CRM 로고)
+  (auth)/login/                  로그인 (DB-CRM 로고 + 태그라인)
   (app)/
     layout.tsx                   인증 필수 · 헤더/풋터 · 유휴 타임아웃
     customers/                   고객 목록·검색·상세
-    admin/                       관리자 전용 (excel/users/audit)
+    admin/
+      users/                     사용자 관리 (접속 상태 + 강제 로그아웃)
+      excel/                     엑셀 업/다운로드
+      audit/                     변경 이력
+      logins/                    로그인 이력 (신규)
     @modal/(.)customers/[id]/    Intercepting Route 모달
   api/
     auth/[...nextauth]/          Auth.js
     customers/export/            엑셀 다운로드
     customers/import/            엑셀 업로드 (mode=preview|apply)
+  layout.tsx                     OG 메타 · Toaster
 
 lib/
-  db/                            Drizzle 스키마·클라이언트·쿼리
+  db/                            Drizzle 스키마·클라이언트
   auth/                          세션·RBAC·비밀번호 해시
-  customers/                     쿼리·Server Actions
+  customers/
+    columns.ts                   28컬럼 메타데이터 (단일 출처)
+    queries.ts · actions.ts      쿼리·Server Actions
+    get-detail.ts · schema.ts · preserve-query.ts
   excel/                         28컬럼 매핑·importer·exporter
   audit/                         감사로그 쿼리·diff
-  users/                         사용자 CRUD
+  users/
+    queries.ts · actions.ts · schema.ts
+    online.ts                    접속 상태 판정 (클라이언트 안전)
+  logins/queries.ts              로그인 이벤트 쿼리
+  notifications/
+    index.ts                     디스패처 (Slack + Telegram 병행)
+    format.ts                    공통 포맷 유틸
+    slack.ts · telegram.ts       각 transport
   company.ts                     DB-CRM 브랜드 상수
   env.ts                         zod 기반 env 검증
-  format.ts                      전화·날짜·금액·마스킹 유틸
+  format.ts                      전화·날짜·마스킹 유틸
 
 components/
   brand/                         로고·헤더·풋터
   auth/                          로그인 폼·유휴 타임아웃
-  customers/                     목록·상세·검색·일괄변경·삭제
-  admin/                         엑셀·사용자·감사로그 UI
+  customers/
+    list-table.tsx               TanStack-free 테이블 (정렬·DnD·리사이즈)
+    use-table-prefs.ts           localStorage 훅
+    detail-form.tsx · detail-dialog.tsx · search-bar.tsx · ...
+  admin/
+    user-table.tsx · user-form-dialog.tsx · ...
+    force-logout-dialog.tsx      (신규) 강제 로그아웃 확인
+    login-history-table.tsx      (신규) 로그인 이력 테이블
+    login-filter.tsx · login-history-pagination.tsx (신규)
+    audit-table.tsx · audit-filter.tsx · audit-pagination.tsx
   ui/                            shadcn/ui 기본 컴포넌트
 
 scripts/                         CLI용 (migrate · seed · import-xlsx)
-drizzle/                         생성된 마이그레이션 SQL (0000–0005)
+drizzle/                         생성된 마이그레이션 SQL (0000–0006)
 material/                        원본 레퍼런스 (고객명부.xlsx, 로고 등)
-public/brand/db-crm-logo.png     DB-CRM 로고
+public/
+  brand/db-crm-logo.png          DB-CRM 로고
+  og-image.png                   카톡·SNS 링크 프리뷰 이미지
+auth.ts · auth.config.ts         Auth.js v5 구성
 ```
 
 ---
@@ -207,7 +257,25 @@ public/brand/db-crm-logo.png     DB-CRM 로고
 | `canExport` | 엑셀 다운로드 |
 
 - `admin` role 은 위 4종을 자동으로 모두 보유합니다.
-- 담당자 일괄 재배정·사용자 관리·변경 이력 뷰어는 항상 admin 전용.
+- 담당자 일괄 재배정·사용자 관리·변경 이력·로그인 이력 뷰어는 항상 admin 전용.
+- 관리자는 다른 사용자를 **강제 로그아웃** 가능 (본인 제외). 대상 사용자는 다음 페이지 이동 시 자동으로 `/login` 으로 돌아감.
+
+---
+
+## 알림 시스템
+
+로그인·강제 로그아웃 이벤트를 외부 메신저로 실시간 전송합니다.
+
+| 이벤트 | 내용 |
+|---|---|
+| 로그인 성공 | 🔐 이름·ID·역할 · IP · 브라우저 · 시각 |
+| 로그인 실패 | 🚨 시도한 ID · IP · 실패 사유 · 시각 |
+| 강제 로그아웃 | ⛔ 대상·관리자·시각 |
+
+- **Slack**: `SLACK_WEBHOOK_URL` 설정 시 활성
+- **Telegram**: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 둘 다 설정 시 활성
+- 양쪽 모두 구성하면 **병행 발송** (한쪽 실패해도 다른 쪽 영향 없음)
+- 웹훅 실패는 로그인 자체를 막지 않음 (fire-and-forget, 3초 타임아웃)
 
 ---
 
@@ -216,7 +284,11 @@ public/brand/db-crm-logo.png     DB-CRM 로고
 - **사용자 추가 · 비밀번호 관리**: 관리자 → 사용자 관리
 - **엑셀 대량 이관**: 관리자 → 엑셀 업/다운로드 → 미리보기 → 업로드 실행 (`canCreate` 필요)
 - **담당자 일괄 재배정**: 고객 목록 체크박스 다중 선택 → 플로팅 바 (admin 전용)
-- **변경 이력 감사**: 관리자 → 변경 이력 (액션·작업자·기간별 필터)
+- **변경 이력**: 관리자 → 변경 이력 (고객 데이터 변경 감사)
+- **로그인 이력**: 관리자 → 로그인 이력 (인증 이벤트 감사)
+- **강제 로그아웃**: 관리자 → 사용자 관리 → 각 사용자 행의 "로그아웃" 버튼
+- **접속 상태 확인**: 사용자 관리 테이블 맨 왼쪽 컬럼 (🟢 접속 중 / ⚪ 오프라인, 5분 기준)
 - **세션 만료**: 기본 8시간(JWT), 유휴 30분 자동 로그아웃(5분 전 경고)
-- **이미지 저장 파일명**: `{고객이름}{생년2자리}{간단주소}.png` 형식 (예: `김동환79충북청주.png`)
+- **이미지 저장 파일명**: `{고객이름}{생년2자리}{간단주소}.png` (예: `김동환79충북청주.png`)
 - **메모 입력 단축**: 메모 textarea 우클릭 → `YYYY.MM.DD HH:mm (담당자) :` 자동 삽입
+- **테이블 개인화**: 컬럼 헤더 클릭(정렬) · 드래그(순서 변경) · 경계 드래그(폭 조절) — localStorage 저장. "컬럼 초기화" 버튼으로 기본값 복원
