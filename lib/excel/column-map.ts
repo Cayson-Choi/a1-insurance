@@ -84,6 +84,30 @@ function dateOnly(v: unknown): string | null {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * 엑셀 "등록일" / "수정일[]" 셀 → Date 객체. 빈 값이면 null.
+ * 문자열은 **KST(+09:00) 로 해석** — Vercel UTC 서버에서도 한국 시각 기준으로 정확히 저장.
+ */
+export function parseDateTimeCell(v: unknown): Date | null {
+  if (isNil(v)) return null;
+  if (v instanceof Date) return Number.isNaN(v.valueOf()) ? null : v;
+  const s = String(v).trim();
+  if (!s) return null;
+  // "YYYY-MM-DD HH:MM:SS" 또는 "YYYY-MM-DDTHH:MM:SS" 포맷 — KST 로 해석
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(s);
+  if (m) {
+    const [, y, mo, d, h, mi, se] = m;
+    // KST(+09:00) → UTC: 시각에서 9시간 빼기
+    const utcMs = Date.UTC(+y!, +mo! - 1, +d!, +h! - 9, +mi!, +se!);
+    const date = new Date(utcMs);
+    return Number.isNaN(date.valueOf()) ? null : date;
+  }
+  // ISO 형식(TZ 포함 포맷)은 그대로 JS Date 파싱 위임
+  const iso = s.includes("T") ? s : s.replace(" ", "T");
+  const d = new Date(iso);
+  return Number.isNaN(d.valueOf()) ? null : d;
+}
+
 function callResult(v: unknown): CallResult | null {
   const s = str(v);
   if (!s) return null;

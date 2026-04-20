@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { toast } from "sonner";
 import { Loader2, UploadCloud, CheckCircle2, FileSpreadsheet, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type PreviewSampleRow = {
 type PreviewResult = {
   ok: boolean;
   total: number;
+  existingCount: number;
   invalidCount: number;
   unknownAgentCount: number;
   previewSample: PreviewSampleRow[];
@@ -28,14 +30,13 @@ type PreviewResult = {
 type ApplyResult = {
   ok: boolean;
   total: number;
+  deletedCount: number;
   inserted: number;
-  updated: number;
-  unchanged?: number;
   skipped: number;
   invalidCount: number;
   unknownAgentCount: number;
-  rrnBackEncrypted?: number;
-  rrnFrontHashed?: number;
+  rrnBackCount?: number;
+  rrnFrontCount?: number;
 };
 
 export function ExcelUploader() {
@@ -45,6 +46,7 @@ export function ExcelUploader() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [mode, setMode] = useState<"idle" | "preview" | "apply">("idle");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function request(targetMode: "preview" | "apply") {
     if (!file) {
@@ -70,12 +72,10 @@ export function ExcelUploader() {
         toast.success(`미리보기 완료 (${json.total}건)`);
       } else {
         const r = json as ApplyResult;
-        const rrnMsg =
-          r.rrnBackEncrypted || r.rrnFrontHashed
-            ? ` · 주민번호 암호화 ${r.rrnBackEncrypted ?? 0}건 · 앞자리 해시 ${r.rrnFrontHashed ?? 0}건`
-            : "";
         toast.success(
-          `적용 완료: 신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 변경없음 ${r.unchanged ?? 0}건 · 건너뜀 ${r.skipped}건${rrnMsg}`,
+          `교체 완료: 기존 ${r.deletedCount}건 삭제 · 신규 ${r.inserted}건 입력${
+            r.skipped ? ` · 건너뜀 ${r.skipped}건` : ""
+          }`,
           { duration: 6000 },
         );
         setPreview(null);
@@ -88,6 +88,7 @@ export function ExcelUploader() {
       toast.error("네트워크 오류가 발생했습니다.");
     } finally {
       setMode("idle");
+      setConfirmOpen(false);
     }
   }
 
@@ -102,7 +103,7 @@ export function ExcelUploader() {
           {file ? file.name : "엑셀 파일(.xlsx) 선택"}
         </div>
         <div className="text-xs text-muted-foreground">
-          28컬럼 포맷 · 최대 10MB · 고객코드No 기준 upsert
+          28컬럼 포맷 · 최대 10MB · <b className="text-destructive">업로드 시 기존 고객 데이터 전부 교체</b>
         </div>
         <input
           ref={inputRef}
@@ -134,19 +135,13 @@ export function ExcelUploader() {
         </Button>
         <Button
           type="button"
-          className="bg-brand text-brand-foreground hover:bg-brand-hover"
+          className="bg-destructive text-white hover:bg-destructive/90"
           onClick={() => {
             if (!preview?.ok) {
               toast.error("먼저 '미리보기'로 파일을 검증하세요.");
               return;
             }
-            if (
-              !window.confirm(
-                `총 ${preview.total}건을 DB에 반영합니다. 계속할까요?\n· 고객코드No 일치: 기존 데이터 갱신\n· 일치 없음: 신규 추가\n· 이 동작은 되돌릴 수 없습니다.`,
-              )
-            )
-              return;
-            request("apply");
+            setConfirmOpen(true);
           }}
           disabled={!preview?.ok || mode !== "idle" || pending}
         >
@@ -175,7 +170,8 @@ export function ExcelUploader() {
       {preview?.ok ? (
         <div className="space-y-3 rounded-lg border bg-card p-4">
           <div className="flex flex-wrap gap-4 text-sm">
-            <Stat label="총 행" value={preview.total} />
+            <Stat label="기존 DB" value={preview.existingCount} />
+            <Stat label="엑셀" value={preview.total} />
             <Stat label="오류 행" value={preview.invalidCount} danger={preview.invalidCount > 0} />
             <Stat label="미등록 담당자" value={preview.unknownAgentCount} danger={preview.unknownAgentCount > 0} />
           </div>
@@ -217,6 +213,58 @@ export function ExcelUploader() {
           <div className="text-xs text-muted-foreground">* 앞 10건만 미리 표시합니다.</div>
         </div>
       ) : null}
+
+      {/* 교체 확인 다이얼로그 */}
+      <DialogPrimitive.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-open:animate-in data-open:fade-in-0" />
+          <DialogPrimitive.Popup className="fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
+            <div className="flex items-center gap-2 border-b px-5 py-3">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogPrimitive.Title className="text-base font-semibold">
+                전체 데이터 교체
+              </DialogPrimitive.Title>
+            </div>
+            <div className="space-y-3 px-5 py-4 text-sm">
+              <div className="rounded-md bg-muted/50 px-3 py-2 tabular-nums">
+                현재 DB: <b>{preview?.existingCount?.toLocaleString("ko-KR") ?? "-"}</b>건 · 엑셀: <b>{preview?.total?.toLocaleString("ko-KR") ?? "-"}</b>건
+              </div>
+              <div className="text-muted-foreground">
+                업로드를 실행하면 <b className="text-destructive">현재 DB 의 고객 데이터가 모두 삭제</b>되고 엑셀의 내용으로 완전히 교체됩니다.
+              </div>
+              <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1">
+                <li>삭제 후 복구 불가 — 엑셀 백업 파일 보관 권장</li>
+                <li>웹에서 최근 편집한 내용이 있다면 <b>손실</b>될 수 있음</li>
+                <li>변경 이력(감사로그) 은 그대로 보존됨</li>
+                <li>담당자·로그인 이력은 영향 없음</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-sidebar/40 px-5 py-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setConfirmOpen(false)}
+                disabled={mode === "apply"}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={() => request("apply")}
+                disabled={mode === "apply"}
+              >
+                {mode === "apply" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                교체 실행
+              </Button>
+            </div>
+          </DialogPrimitive.Popup>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   );
 }

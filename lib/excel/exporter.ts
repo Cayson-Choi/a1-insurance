@@ -45,14 +45,22 @@ function toDateStr(v: Date | string | null): string {
   return `${y}-${m}-${day}`;
 }
 
-function toDateTimeStr(v: Date | string | null): string {
+/**
+ * Date → "YYYY-MM-DD HH:MM:SS" (**KST 기준**, 서버 TZ 무관).
+ * Vercel 서버는 UTC 라서 getHours() 사용 시 한국 시각이 아니게 됨 → 명시적으로 +9 시간 오프셋 적용.
+ */
+function toDateTimeStr(v: Date | string | null | undefined): string {
   if (!v) return "";
   const d = v instanceof Date ? v : new Date(v);
   if (Number.isNaN(d.valueOf())) return "";
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${toDateStr(d)} ${hh}:${mi}:${ss}`;
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const y = kst.getUTCFullYear();
+  const mo = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(kst.getUTCDate()).padStart(2, "0");
+  const hh = String(kst.getUTCHours()).padStart(2, "0");
+  const mi = String(kst.getUTCMinutes()).padStart(2, "0");
+  const ss = String(kst.getUTCSeconds()).padStart(2, "0");
+  return `${y}-${mo}-${dd} ${hh}:${mi}:${ss}`;
 }
 
 export async function buildCustomersWorkbook(

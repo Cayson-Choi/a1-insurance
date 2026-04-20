@@ -110,12 +110,10 @@ export const customers = pgTable(
     reservationAt: timestamp("reservation_at", { withTimezone: true }),
     memo: text("memo"),
     dbCompany: varchar("db_company", { length: 60 }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    // 엑셀 빈 셀은 그대로 NULL 로 보존하기 위해 NOT NULL 해제 (마이그 0007).
+    // 값이 제공되지 않으면 defaultNow() 적용되지만, import route 는 null 을 명시적으로 전달해 이를 우회.
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     index("customers_agent_id_idx").on(t.agentId),
