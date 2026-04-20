@@ -21,6 +21,7 @@
 - **관리자**: 사용자 CRUD + 비밀번호 재설정, 권한 4종 체크박스, 담당자 일괄 변경, 변경 이력 뷰어
 - **모바일**: 햄버거 메뉴, 테이블 가로 스크롤, 팝업 풀스크린, 검색바 2열 그리드
 - **브랜드**: DB-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트, OG 이미지(카톡·링크 프리뷰)
+- **성능**: Vercel Function 리전을 Neon DB 와 동일(`sin1` Singapore)로 배치해 DB 왕복 지연 최소화 + React.cache 로 요청당 인증·권한 조회 중복 제거
 
 ---
 
@@ -292,3 +293,30 @@ auth.ts · auth.config.ts         Auth.js v5 구성
 - **이미지 저장 파일명**: `{고객이름}{생년2자리}{간단주소}.png` (예: `김동환79충북청주.png`)
 - **메모 입력 단축**: 메모 textarea 우클릭 → `YYYY.MM.DD HH:mm (담당자) :` 자동 삽입
 - **테이블 개인화**: 컬럼 헤더 클릭(정렬) · 드래그(순서 변경) · 경계 드래그(폭 조절) — localStorage 저장. "컬럼 초기화" 버튼으로 기본값 복원
+
+---
+
+## 성능 최적화
+
+### 적용 중인 최적화
+
+- **Vercel Function 리전 = Neon DB 리전** (`sin1` Singapore / `ap-southeast-1`)
+  - 서버리스 함수가 Neon 과 같은 AWS 리전에 위치해 DB 쿼리 왕복 ~5ms
+  - 리전 불일치 시(US East ↔ Singapore) 250ms/query 발생 → Singapore 통일로 ~95% 감소
+- **React.cache 로 인증·권한 중복 조회 제거** (`lib/auth/rbac.ts`)
+  - `getSessionUser()`, `getPermissions(agentId)` 를 `cache(...)` 래핑
+  - layout + page 에서 둘 다 `requireUser` 호출해도 `auth()` 세션 콜백 DB 쿼리 1회
+  - Intercepting Route 모달에서 layout·@modal·page 셋 중복 호출 → 1회로 통합
+- **DB 커넥션 풀링**: Neon Pooler 엔드포인트 사용 (`-pooler.*.neon.tech`), Drizzle `max: 10 / prepare: false`
+- **Auth.js jwt 콜백 `last_seen_at` throttle**: 1분 이내 UPDATE 스킵
+- **standalone Next.js 빌드**: Vercel Edge 함수 대신 Fluid Compute (Node.js)
+
+### 추가로 권장 가능한 개선 (선택)
+
+| 방안 | 효과 | 비용 | 복잡도 |
+|---|---|---|---|
+| Neon Pro → auto-sleep 해제 | 첫 요청 cold start 1~2초 제거 | $19/월 | 설정만 |
+| JWT 토큰에 권한 embed | 페이지당 DB 쿼리 -1 | 무료 | 중 (auth.ts + rbac.ts 수정) |
+| `listAgents` `unstable_cache`(60s) | 관리자 페이지 DB 쿼리 -1 | 무료 | 낮 |
+
+현 구성으로도 Singapore 리전 이동 + React.cache 적용만으로 이전 대비 약 **2~3배 빠른 페이지 로드**가 기대됩니다. 더 필요한 경우 위 방안을 순차 적용.
