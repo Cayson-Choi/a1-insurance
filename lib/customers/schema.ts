@@ -8,6 +8,14 @@ const optionalString = z
   .optional()
   .transform((v) => (v === "" || v === undefined ? null : v));
 
+// 메모 전용: 상담 기록 누적 대비 충분한 길이. DB text 컬럼이라 사실상 무제한이지만 안전장치로 10k.
+const optionalMemo = z
+  .string()
+  .trim()
+  .max(10000, "메모는 최대 10,000자까지 입력 가능합니다.")
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? null : v));
+
 const optionalDate = z
   .string()
   .trim()
@@ -69,6 +77,13 @@ const optionalNumeric = z
     message: "숫자만 입력하세요.",
   });
 
+// 통화결과 — 빈 문자열/undefined 는 null 로 처리 (z.enum 은 "" 를 거부하기 때문)
+// preprocess 로 "" → undefined 변환 후 z.enum 에 nullable/optional 적용 → 타입 정확히 CallResult | null | undefined
+const optionalCallResult = z.preprocess(
+  (v) => (v === "" ? undefined : v),
+  z.enum(CALL_RESULTS).nullable().optional(),
+);
+
 export const UpdateCustomerSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
   phone1: optionalPhone,
@@ -76,7 +91,7 @@ export const UpdateCustomerSchema = z.object({
   address: optionalString,
   addressDetail: optionalString,
   birthDate: optionalDate,
-  callResult: z.enum(CALL_RESULTS).nullable().optional(),
+  callResult: optionalCallResult,
   dbCompany: optionalString,
   dbProduct: optionalString,
   dbPremium: optionalNumeric,
@@ -85,7 +100,7 @@ export const UpdateCustomerSchema = z.object({
   dbEndAt: optionalDate,
   dbRegisteredAt: optionalDate,
   reservationAt: optionalDateTime,
-  memo: optionalString,
+  memo: optionalMemo,
   rrnFront: optionalRrnFront,
   rrnBack: optionalRrnBack,
   branch: optionalString,

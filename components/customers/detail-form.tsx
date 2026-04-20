@@ -131,6 +131,32 @@ export function DetailForm({
   // React 19의 <form action={fn}> 은 성공 시 uncontrolled 입력을 defaultValue로 자동 리셋한다.
   // 사용자가 비운 값(예: 메모)이 저장은 되지만 화면에선 원래 값으로 되돌아가는 문제를 막기 위해
   // onSubmit + preventDefault로 처리한다.
+  // 필드 이름(코드) → 한글 라벨 — 에러 토스트에 어떤 필드에서 실패했는지 표시용
+  const FIELD_LABELS: Record<string, string> = {
+    name: "이름",
+    phone1: "연락처",
+    job: "직업",
+    address: "원주소",
+    addressDetail: "방문주소",
+    birthDate: "생년월일",
+    callResult: "통화결과",
+    dbCompany: "보험사",
+    dbProduct: "보험상품명",
+    dbPremium: "DB 보험료",
+    subCategory: "소분류",
+    dbStartAt: "가입일",
+    dbEndAt: "DB 만기일",
+    dbRegisteredAt: "DB 등록일",
+    reservationAt: "예약일시",
+    memo: "메모",
+    rrnFront: "주민번호 앞자리",
+    rrnBack: "주민번호 뒷자리",
+    branch: "지사",
+    hq: "본부",
+    team: "소속팀",
+    agentId: "담당자",
+  };
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -139,7 +165,13 @@ export function DetailForm({
       const res = await updateCustomerAction(customer.id, formData);
       if (!res.ok) {
         if (res.fieldErrors) setFieldErrors(res.fieldErrors);
-        toast.error(res.error);
+        // 어떤 필드에서 무엇이 문제인지 토스트에 표시 (스크롤 아래 필드라도 사용자가 즉시 인지)
+        const firstErrorField = res.fieldErrors ? Object.keys(res.fieldErrors)[0] : undefined;
+        const firstErrorMsg = firstErrorField ? res.fieldErrors?.[firstErrorField]?.[0] : undefined;
+        const description = firstErrorField
+          ? `${FIELD_LABELS[firstErrorField] ?? firstErrorField}: ${firstErrorMsg ?? "형식 오류"}`
+          : undefined;
+        toast.error(res.error, description ? { description } : undefined);
         return;
       }
       toast.success("고객 정보가 저장되었습니다.");
@@ -443,7 +475,7 @@ export function DetailForm({
                   defaultValue={customer.branch ?? ""}
                   className="h-10"
                   placeholder="수유센터"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <Field label="본부" error={err("hq")}>
@@ -452,7 +484,7 @@ export function DetailForm({
                   defaultValue={customer.hq ?? ""}
                   className="h-10"
                   placeholder="동의콜파트"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <Field label="소속팀" error={err("team")}>
@@ -461,7 +493,7 @@ export function DetailForm({
                   defaultValue={customer.team ?? ""}
                   className="h-10"
                   placeholder="곽영서팀"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
             </div>
@@ -473,7 +505,7 @@ export function DetailForm({
                 autoFocus
                 required
                 className="h-10"
-                disabled={!canEdit}
+                readOnly={!canEdit}
               />
             </Field>
 
@@ -484,7 +516,7 @@ export function DetailForm({
                   name="birthDate"
                   defaultValue={toDateInput(customer.birthDate)}
                   className="h-10 tabular-nums"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <Field label="주민번호 앞자리 (6)" error={err("rrnFront")}>
@@ -496,7 +528,7 @@ export function DetailForm({
                   placeholder="예: 901201"
                   className="h-10 font-mono tabular-nums"
                   autoComplete="off"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
             </div>
@@ -511,7 +543,7 @@ export function DetailForm({
                   placeholder="예: 1234567"
                   className="h-10 font-mono tabular-nums"
                   autoComplete="off"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <div />
@@ -526,7 +558,7 @@ export function DetailForm({
                   placeholder="010-0000-0000"
                   className="h-10 font-mono tabular-nums flex-1"
                   inputMode="tel"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
                 <Button
                   type="button"
@@ -564,7 +596,7 @@ export function DetailForm({
                 defaultValue={customer.address ?? ""}
                 placeholder="시/도 구/군 동/읍 …"
                 className="h-10"
-                disabled={!canEdit}
+                readOnly={!canEdit}
               />
             </Field>
             <Field label="방문주소" error={err("addressDetail")}>
@@ -581,7 +613,7 @@ export function DetailForm({
                 name="job"
                 defaultValue={customer.job ?? ""}
                 className="h-10"
-                disabled={!canEdit}
+                readOnly={!canEdit}
               />
             </Field>
           </section>
@@ -620,7 +652,7 @@ export function DetailForm({
                 name="dbCompany"
                 defaultValue={customer.dbCompany ?? ""}
                 className="h-10"
-                disabled={!canEdit}
+                readOnly={!canEdit}
               />
             </Field>
             <Field label="보험상품명" error={err("dbProduct")}>
@@ -628,7 +660,7 @@ export function DetailForm({
                 name="dbProduct"
                 defaultValue={customer.dbProduct ?? ""}
                 className="h-10"
-                disabled={!canEdit}
+                readOnly={!canEdit}
               />
             </Field>
 
@@ -639,7 +671,7 @@ export function DetailForm({
                   name="dbStartAt"
                   defaultValue={toDateInput(customer.dbStartAt)}
                   className="h-10 tabular-nums"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <Field label="DB 만기일" error={err("dbEndAt")}>
@@ -648,7 +680,7 @@ export function DetailForm({
                   name="dbEndAt"
                   defaultValue={toDateInput(customer.dbEndAt)}
                   className="h-10 tabular-nums"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
             </div>
@@ -658,11 +690,13 @@ export function DetailForm({
                 <Input
                   type="text"
                   name="dbPremium"
-                  defaultValue={customer.dbPremium ?? ""}
+                  /* DB numeric(14,2) 는 "55000.00" 반환 — Number 로 정규화하면 "55000"
+                   * 소수점이 실제로 의미 있으면(예 55000.5) 그대로 유지됨 */
+                  defaultValue={customer.dbPremium ? String(Number(customer.dbPremium)) : ""}
                   inputMode="numeric"
                   placeholder="55000"
                   className="h-10 tabular-nums"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <Field label="소분류" error={err("subCategory")}>
@@ -670,7 +704,7 @@ export function DetailForm({
                   name="subCategory"
                   defaultValue={customer.subCategory ?? ""}
                   className="h-10"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
             </div>
@@ -682,7 +716,7 @@ export function DetailForm({
                   name="reservationAt"
                   defaultValue={toDateTimeLocal(customer.reservationAt)}
                   className="h-10 tabular-nums"
-                  disabled={!canEdit}
+                  readOnly={!canEdit}
                 />
               </Field>
               <div />
