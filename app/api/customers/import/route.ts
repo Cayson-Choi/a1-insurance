@@ -5,7 +5,61 @@ import { customers, users } from "@/lib/db/schema";
 import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseCustomersWorkbook } from "@/lib/excel/importer";
 import { birthDateToFrontYymmdd, extractRrnBackRaw } from "@/lib/excel/column-map";
-import type { NewCustomer } from "@/lib/db/schema";
+import type { Customer, NewCustomer } from "@/lib/db/schema";
+
+// UPDATE 경로에서 "실제 변경 여부" 를 판정할 때 비교할 필드 목록.
+// createdAt / updatedAt / id 는 제외 — 이들은 의미적 타임스탬프이므로 비교 대상이 아님.
+const DIFF_KEYS = [
+  "customerCode",
+  "agentId",
+  "name",
+  "birthDate",
+  "rrnFront",
+  "rrnBack",
+  "phone1",
+  "job",
+  "address",
+  "addressDetail",
+  "callResult",
+  "dbProduct",
+  "dbPremium",
+  "dbHandler",
+  "subCategory",
+  "dbPolicyNo",
+  "dbRegisteredAt",
+  "mainCategory",
+  "dbStartAt",
+  "dbEndAt",
+  "branch",
+  "hq",
+  "team",
+  "fax",
+  "reservationReceived",
+  "dbCompany",
+] as const satisfies readonly (keyof Customer)[];
+
+/** 문자열로 정규화. 필드별 특수 케이스: 숫자 컬럼은 수치 비교로 소수점 여유("55000" vs "55000.00") 흡수. */
+function normalize(v: unknown, key?: string): string {
+  if (v === null || v === undefined) return "";
+  if (v instanceof Date) return v.toISOString();
+  const s = String(v).trim();
+  // dbPremium: PostgreSQL numeric 은 "55000.00" 반환, 엑셀 파싱은 "55000" — 숫자 비교로 정렬
+  if (key === "dbPremium") {
+    const n = Number(s.replace(/,/g, ""));
+    return Number.isFinite(n) ? n.toString() : s;
+  }
+  return s;
+}
+
+function hasChanges(existing: Customer, incoming: Partial<NewCustomer>): boolean {
+  const inc = incoming as Record<string, unknown>;
+  for (const k of DIFF_KEYS) {
+    // 엑셀이 이 필드를 제공하지 않으면(undefined) 비교에서 제외 — drizzle .set() 도 undefined 필드는 SET 에서 빠뜨려 DB 기존 값 유지. 비교도 동일하게 처리해야 왕복 일관성 보장.
+    if (inc[k] === undefined) continue;
+    if (normalize(existing[k], k) !== normalize(inc[k], k)) return true;
+  }
+  return false;
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -87,6 +141,7 @@ export async function POST(req: NextRequest) {
   // apply — 오류 있는 행은 건너뜀, 미등록 담당자는 null 처리
   let inserted = 0;
   let updated = 0;
+  let unchanged = 0;
   let rrnBackCount = 0;
   let rrnFrontCount = 0;
 
@@ -114,11 +169,16 @@ export async function POST(req: NextRequest) {
         where: eq(customers.customerCode, c.customerCode),
       });
       if (existing) {
-        await db
-          .update(customers)
-          .set({ ...c, updatedAt: new Date() })
-          .where(eq(customers.id, existing.id));
-        updated++;
+        if (hasChanges(existing, c)) {
+          await db
+            .update(customers)
+            .set({ ...c, updatedAt: new Date() })
+            .where(eq(customers.id, existing.id));
+          updated++;
+        } else {
+          // 값이 동일하면 DB 를 건드리지 않음 → updatedAt 도 그대로 유지
+          unchanged++;
+        }
         continue;
       }
     } else if (c.name && c.phone1) {
@@ -131,11 +191,15 @@ export async function POST(req: NextRequest) {
         ),
       });
       if (existing) {
-        await db
-          .update(customers)
-          .set({ ...c, updatedAt: new Date() })
-          .where(eq(customers.id, existing.id));
-        updated++;
+        if (hasChanges(existing, c)) {
+          await db
+            .update(customers)
+            .set({ ...c, updatedAt: new Date() })
+            .where(eq(customers.id, existing.id));
+          updated++;
+        } else {
+          unchanged++;
+        }
         continue;
       }
     }
@@ -149,7 +213,8 @@ export async function POST(req: NextRequest) {
     total: parsed.total,
     inserted,
     updated,
-    skipped: parsed.total - inserted - updated,
+    unchanged,
+    skipped: parsed.total - inserted - updated - unchanged,
     invalidCount,
     unknownAgentCount,
     rrnBackCount,

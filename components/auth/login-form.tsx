@@ -51,7 +51,6 @@ export function LoginForm({ next }: { next?: string }) {
           autoComplete="username"
           required
           autoFocus
-          placeholder="예: a00003"
           className="h-11"
         />
       </div>

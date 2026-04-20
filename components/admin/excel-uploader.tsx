@@ -30,6 +30,7 @@ type ApplyResult = {
   total: number;
   inserted: number;
   updated: number;
+  unchanged?: number;
   skipped: number;
   invalidCount: number;
   unknownAgentCount: number;
@@ -74,7 +75,7 @@ export function ExcelUploader() {
             ? ` · 주민번호 암호화 ${r.rrnBackEncrypted ?? 0}건 · 앞자리 해시 ${r.rrnFrontHashed ?? 0}건`
             : "";
         toast.success(
-          `적용 완료: 신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 건너뜀 ${r.skipped}건${rrnMsg}`,
+          `적용 완료: 신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 변경없음 ${r.unchanged ?? 0}건 · 건너뜀 ${r.skipped}건${rrnMsg}`,
           { duration: 6000 },
         );
         setPreview(null);

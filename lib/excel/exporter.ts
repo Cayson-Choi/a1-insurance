@@ -88,7 +88,9 @@ export async function buildCustomersWorkbook(
       agentName: r.agentName ?? "",
       name: r.name,
       birthDate: toDateStr(r.birthDate),
-      rrnFrontRaw: r.rrnFront && r.rrnBack ? `${r.rrnFront}-${r.rrnBack}` : (r.rrnBack ?? r.rrnFront ?? ""),
+      // 원본 엑셀 포맷: "주민No" 컬럼은 뒤 7자리만. 앞자리(YYMMDD)는 생년월일 컬럼에서 파생.
+      // 이 규칙을 유지해야 export → import 왕복 시 주민번호가 소실되지 않음.
+      rrnFrontRaw: r.rrnBack ?? "",
       phone1: r.phone1 ?? "",
       job: r.job ?? "",
       address: r.address ?? "",
