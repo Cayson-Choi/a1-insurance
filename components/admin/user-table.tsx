@@ -92,6 +92,7 @@ export function UserTable({
                       <PermBadge label="수정" on={u.canEdit} />
                       <PermBadge label="삭제" on={u.canDelete} />
                       <PermBadge label="엑셀" on={u.canExport} />
+                      <PermBadge label="이미지" on={u.canDownloadImage} />
                     </div>
                   )}
                 </TableCell>

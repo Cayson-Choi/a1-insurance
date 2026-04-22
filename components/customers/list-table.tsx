@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  CalendarClock,
   ChevronsUpDown,
   GripVertical,
   Inbox,
@@ -32,6 +33,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { BulkReassignDialog } from "@/components/customers/bulk-reassign-dialog";
+import { BulkUpdateDateDialog } from "@/components/customers/bulk-update-date-dialog";
 import { useTablePrefs } from "@/components/customers/use-table-prefs";
 import { formatDate, formatDateTime, formatPhone, maskPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -71,6 +73,7 @@ export function ListTable({
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDateOpen, setBulkDateOpen] = useState(false);
 
   // 보이는 컬럼만 추림 (admin 전용은 권한 없으면 제외)
   const visibleIds = useMemo(
@@ -282,6 +285,15 @@ export function ListTable({
           </Button>
           <Button
             type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setBulkDateOpen(true)}
+          >
+            <CalendarClock className="h-4 w-4" />
+            DB 등록일 일괄 변경
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             size="sm"
             className="text-muted-foreground"
@@ -294,14 +306,23 @@ export function ListTable({
       ) : null}
 
       {canBulkEdit ? (
-        <BulkReassignDialog
-          open={bulkOpen}
-          onOpenChange={setBulkOpen}
-          selectedCount={selected.size}
-          selectedIds={selectedIds}
-          agents={agents}
-          onDone={clearSelection}
-        />
+        <>
+          <BulkReassignDialog
+            open={bulkOpen}
+            onOpenChange={setBulkOpen}
+            selectedCount={selected.size}
+            selectedIds={selectedIds}
+            agents={agents}
+            onDone={clearSelection}
+          />
+          <BulkUpdateDateDialog
+            open={bulkDateOpen}
+            onOpenChange={setBulkDateOpen}
+            selectedCount={selected.size}
+            selectedIds={selectedIds}
+            onDone={clearSelection}
+          />
+        </>
       ) : null}
     </>
   );

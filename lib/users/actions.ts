@@ -61,6 +61,7 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
     canEdit: d.canEdit,
     canDelete: d.canDelete,
     canExport: d.canExport,
+    canDownloadImage: d.canDownloadImage,
   });
 
   revalidatePath("/admin/users");
@@ -101,6 +102,7 @@ export async function updateUserAction(
       canEdit: d.canEdit,
       canDelete: d.canDelete,
       canExport: d.canExport,
+      canDownloadImage: d.canDownloadImage,
     })
     .where(eq(users.agentId, agentId));
 

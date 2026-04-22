@@ -45,6 +45,7 @@ export const users = pgTable(
     canEdit: boolean("can_edit").notNull().default(false),
     canDelete: boolean("can_delete").notNull().default(false),
     canExport: boolean("can_export").notNull().default(false),
+    canDownloadImage: boolean("can_download_image").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

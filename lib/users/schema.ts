@@ -25,6 +25,7 @@ export const CreateUserSchema = z.object({
   canEdit: boolFlag,
   canDelete: boolFlag,
   canExport: boolFlag,
+  canDownloadImage: boolFlag,
 });
 
 export const UpdateUserSchema = z.object({
@@ -34,6 +35,7 @@ export const UpdateUserSchema = z.object({
   canEdit: boolFlag,
   canDelete: boolFlag,
   canExport: boolFlag,
+  canDownloadImage: boolFlag,
 });
 
 export const ResetPasswordSchema = z.object({

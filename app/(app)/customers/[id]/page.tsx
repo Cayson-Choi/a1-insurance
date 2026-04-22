@@ -41,6 +41,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
         canEdit={user.canEdit}
         canDelete={user.canDelete}
         canEditAgent={user.role === "admin"}
+        canDownloadImage={user.canDownloadImage}
         prevHref={prevHref}
         nextHref={nextHref}
         closeHref={closeHref}

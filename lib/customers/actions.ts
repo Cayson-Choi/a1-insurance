@@ -246,6 +246,52 @@ export async function bulkReassignAction(
   return { ok: true, updated: existing.length, newAgentId: newAgent };
 }
 
+type BulkDateResult =
+  | { ok: true; updated: number; newDate: string | null }
+  | { ok: false; error: string };
+
+const BULK_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function bulkUpdateDbRegisteredAtAction(
+  customerIds: string[],
+  newDate: string | null,
+): Promise<BulkDateResult> {
+  const actor = await requireAdmin();
+  if (!customerIds.length) return { ok: false, error: "선택된 고객이 없습니다." };
+
+  const normalized = newDate && newDate.trim() ? newDate.trim() : null;
+  if (normalized !== null && !BULK_DATE_RE.test(normalized)) {
+    return { ok: false, error: "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)" };
+  }
+
+  const existing = await db
+    .select({ id: customers.id, dbRegisteredAt: customers.dbRegisteredAt })
+    .from(customers)
+    .where(inArray(customers.id, customerIds));
+
+  if (!existing.length) {
+    return { ok: false, error: "대상 고객을 찾을 수 없습니다." };
+  }
+
+  await db
+    .update(customers)
+    .set({ dbRegisteredAt: normalized, updatedAt: new Date() })
+    .where(inArray(customers.id, customerIds));
+
+  await db.insert(auditLogs).values(
+    existing.map((c) => ({
+      actorAgentId: actor.agentId,
+      customerId: c.id,
+      action: "bulk_change" as const,
+      before: { dbRegisteredAt: c.dbRegisteredAt },
+      after: { dbRegisteredAt: normalized },
+    })),
+  );
+
+  revalidatePath("/customers");
+  return { ok: true, updated: existing.length, newDate: normalized };
+}
+
 type FetchResult =
   | { ok: true; customer: CustomerDetail; context: DetailContext }
   | { ok: false; error: string };

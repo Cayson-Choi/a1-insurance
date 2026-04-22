@@ -16,6 +16,7 @@ export type Permissions = {
   canEdit: boolean;
   canDelete: boolean;
   canExport: boolean;
+  canDownloadImage: boolean;
 };
 
 export type SessionUserWithPerms = SessionUser & Permissions;
@@ -48,17 +49,25 @@ export const getPermissions = cache(async (agentId: string): Promise<Permissions
       canEdit: true,
       canDelete: true,
       canExport: true,
+      canDownloadImage: true,
     },
   });
   if (!row) return null;
   if (row.role === "admin") {
-    return { canCreate: true, canEdit: true, canDelete: true, canExport: true };
+    return {
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canExport: true,
+      canDownloadImage: true,
+    };
   }
   return {
     canCreate: row.canCreate,
     canEdit: row.canEdit,
     canDelete: row.canDelete,
     canExport: row.canExport,
+    canDownloadImage: row.canDownloadImage,
   };
 });
 

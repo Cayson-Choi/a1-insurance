@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { CALL_RESULTS } from "@/lib/excel/column-map";
-import { formatDateTime, formatPhone } from "@/lib/format";
+import { formatPhone } from "@/lib/format";
 import type { CustomerDetail } from "@/lib/customers/get-detail";
 import { updateCustomerAction } from "@/lib/customers/actions";
 
@@ -79,6 +79,7 @@ type Props = {
   canEdit: boolean;
   canDelete: boolean;
   canEditAgent: boolean;
+  canDownloadImage: boolean;
   prevHref: string | null;
   nextHref: string | null;
   closeHref: string;
@@ -95,6 +96,7 @@ export function DetailForm({
   canEdit,
   canDelete,
   canEditAgent,
+  canDownloadImage,
   prevHref,
   nextHref,
   closeHref,
@@ -149,7 +151,6 @@ export function DetailForm({
     dbRegisteredAt: "DB 등록일",
     reservationAt: "예약일시",
     memo: "메모",
-    rrnFront: "주민번호 앞자리",
     rrnBack: "주민번호 뒷자리",
     branch: "지사",
     hq: "본부",
@@ -239,17 +240,38 @@ export function DetailForm({
   }
 
   async function saveImage() {
-    if (!captureRef.current) return;
+    const node = captureRef.current;
+    if (!node) return;
     setSavingImage(true);
     try {
       if (formRef.current) {
         (document.activeElement as HTMLElement | null)?.blur?.();
       }
       const htmlToImage = await import("html-to-image");
-      const dataUrl = await htmlToImage.toPng(captureRef.current, {
+      // 스크롤 컨테이너 전체 콘텐츠를 캡처하도록 scrollHeight/Width 로 강제 확장
+      const fullWidth = node.scrollWidth;
+      const fullHeight = node.scrollHeight;
+      const dataUrl = await htmlToImage.toPng(node, {
         pixelRatio: 2,
         backgroundColor: "#ffffff",
         cacheBust: true,
+        width: fullWidth,
+        height: fullHeight,
+        style: {
+          width: `${fullWidth}px`,
+          height: `${fullHeight}px`,
+          maxHeight: "none",
+          overflow: "visible",
+          transform: "none",
+        },
+        // data-skip-capture 속성이 붙은 노드는 이미지에서 제외 (지사/본부/소속팀 등)
+        filter: (n) => {
+          if (n.nodeType === 1) {
+            const el = n as Element;
+            if (el.hasAttribute?.("data-skip-capture")) return false;
+          }
+          return true;
+        },
       });
       const fd = formRef.current ? new FormData(formRef.current) : null;
       const name = String(fd?.get("name") ?? customer.name ?? "").trim();
@@ -361,21 +383,23 @@ export function DetailForm({
           </Button>
         </div>
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={saveImage}
-            disabled={savingImage}
-            aria-label="이미지 저장"
-          >
-            {savingImage ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ImageDown className="h-4 w-4" />
-            )}
-            <span className="hidden sm:inline">이미지 저장</span>
-          </Button>
+          {canDownloadImage ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={saveImage}
+              disabled={savingImage}
+              aria-label="이미지 저장"
+            >
+              {savingImage ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImageDown className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">이미지 저장</span>
+            </Button>
+          ) : null}
           {canDelete ? (
             <DeleteCustomerDialog
               customerId={customer.id}
@@ -468,7 +492,8 @@ export function DetailForm({
               />
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+            {/* 이미지 저장 시 제외되는 조직 정보 — data-skip-capture 플래그로 html-to-image filter 에서 걸러짐 */}
+            <div className="grid grid-cols-3 gap-3" data-skip-capture>
               <Field label="지사" error={err("branch")}>
                 <Input
                   name="branch"
@@ -519,21 +544,6 @@ export function DetailForm({
                   readOnly={!canEdit}
                 />
               </Field>
-              <Field label="주민번호 앞자리 (6)" error={err("rrnFront")}>
-                <Input
-                  name="rrnFront"
-                  defaultValue={customer.rrnFront ?? ""}
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="예: 901201"
-                  className="h-10 font-mono tabular-nums"
-                  autoComplete="off"
-                  readOnly={!canEdit}
-                />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
               <Field label="주민번호 뒷자리 (7)" error={err("rrnBack")}>
                 <Input
                   name="rrnBack"
@@ -546,7 +556,6 @@ export function DetailForm({
                   readOnly={!canEdit}
                 />
               </Field>
-              <div />
             </div>
 
             <Field label="연락처" error={err("phone1")}>
@@ -732,18 +741,12 @@ export function DetailForm({
                 className="min-h-[260px]"
               />
             </Field>
-
-            <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-muted-foreground">
-              <div>등록일시 {formatDateTime(customer.createdAt)}</div>
-              <div>수정일시 {formatDateTime(customer.updatedAt)}</div>
-            </div>
           </section>
         </form>
       </div>
 
-      <div className="border-t bg-sidebar/40 px-4 py-2 text-[11px] text-muted-foreground flex items-center justify-between">
+      <div className="border-t bg-sidebar/40 px-4 py-2 text-[11px] text-muted-foreground">
         <span>단축키: Esc 닫기 · Ctrl+S 저장 · Ctrl+← / Ctrl+→ 이전/다음</span>
-        <span>수정일시 {formatDateTime(customer.updatedAt)}</span>
       </div>
     </div>
   );

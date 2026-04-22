@@ -16,6 +16,7 @@ type Props = {
   canEdit: boolean;
   canDelete: boolean;
   canEditAgent: boolean;
+  canDownloadImage: boolean;
   prevId: string | null;
   nextId: string | null;
   preservedParams: Record<string, string>;
@@ -29,6 +30,7 @@ export function DetailDialog({
   canEdit,
   canDelete,
   canEditAgent,
+  canDownloadImage,
   prevId: initialPrevId,
   nextId: initialNextId,
   preservedParams,
@@ -180,6 +182,7 @@ export function DetailDialog({
             canEdit={canEdit}
             canDelete={canDelete}
             canEditAgent={canEditAgent}
+            canDownloadImage={canDownloadImage}
             prevHref={prevId ? `/customers/${prevId}${qs}` : null}
             nextHref={nextId ? `/customers/${nextId}${qs}` : null}
             closeHref={closeHref}

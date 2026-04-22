@@ -15,7 +15,9 @@ export default async function AppLayout({
   return (
     <div className="min-h-dvh flex flex-col">
       <AppHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-screen-2xl px-3 md:px-6 py-4 md:py-6">
+      {/* 고객 목록 28컬럼 테이블이 울트라와이드(21:9, ~3440px)까지 전부 펼쳐지도록
+         폭 제한을 풀어둠. 개별 하위 페이지(admin 등)는 자체 레이아웃에서 max-w 적용. */}
+      <main className="flex-1 mx-auto w-full px-3 md:px-6 py-4 md:py-6">
         {children}
       </main>
       <AppFooter />

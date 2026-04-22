@@ -46,6 +46,7 @@ export default async function CustomerDetailModal({ params, searchParams }: Page
       canEdit={user.canEdit}
       canDelete={user.canDelete}
       canEditAgent={user.role === "admin"}
+      canDownloadImage={user.canDownloadImage}
       prevId={context.prevId}
       nextId={context.nextId}
       preservedParams={preservedParams}

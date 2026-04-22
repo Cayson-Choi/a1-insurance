@@ -37,6 +37,9 @@ export function UserFormDialog({
   const [canEdit, setCanEdit] = useState(user?.canEdit ?? false);
   const [canDelete, setCanDelete] = useState(user?.canDelete ?? false);
   const [canExport, setCanExport] = useState(user?.canExport ?? false);
+  const [canDownloadImage, setCanDownloadImage] = useState(
+    user?.canDownloadImage ?? false,
+  );
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -47,6 +50,7 @@ export function UserFormDialog({
     fd.set("canEdit", String(canEdit));
     fd.set("canDelete", String(canDelete));
     fd.set("canExport", String(canExport));
+    fd.set("canDownloadImage", String(canDownloadImage));
     setErrors({});
     startTransition(async () => {
       const res =
@@ -154,6 +158,12 @@ export function UserFormDialog({
                     disabled={role === "admin"}
                     checked={role === "admin" || canExport}
                     onChange={setCanExport}
+                  />
+                  <PermCheck
+                    label="이미지 다운로드"
+                    disabled={role === "admin"}
+                    checked={role === "admin" || canDownloadImage}
+                    onChange={setCanDownloadImage}
                   />
                 </div>
               </div>

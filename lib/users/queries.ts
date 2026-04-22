@@ -11,6 +11,7 @@ export type UserRow = {
   canEdit: boolean;
   canDelete: boolean;
   canExport: boolean;
+  canDownloadImage: boolean;
   createdAt: Date;
   lastLoginAt: Date | null;
   lastSeenAt: Date | null;
@@ -29,6 +30,7 @@ export async function listAllUsers(): Promise<UserRow[]> {
       canEdit: users.canEdit,
       canDelete: users.canDelete,
       canExport: users.canExport,
+      canDownloadImage: users.canDownloadImage,
       createdAt: users.createdAt,
       lastLoginAt: users.lastLoginAt,
       lastSeenAt: users.lastSeenAt,
