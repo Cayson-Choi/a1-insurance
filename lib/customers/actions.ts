@@ -90,15 +90,13 @@ export async function updateCustomerAction(
       };
 
   if (canFullEdit) {
+    // rrnFront 는 UI 에서 입력 필드 제거됨 → birthDate 가 제공되면 거기서 자동 파생.
+    // 빈 birthDate 일 때 기존 rrnFront 를 지우지 않음 (엑셀 import 로만 채워진 케이스 보호).
     if (data.rrnFront !== undefined) {
       patch.rrnFront = data.rrnFront;
-    } else if (data.birthDate !== undefined) {
-      if (data.birthDate) {
-        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
-        if (m) patch.rrnFront = `${m[1].slice(2)}${m[2]}${m[3]}`;
-      } else {
-        patch.rrnFront = null;
-      }
+    } else if (data.birthDate) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
+      if (m) patch.rrnFront = `${m[1].slice(2)}${m[2]}${m[3]}`;
     }
     if (data.rrnBack !== undefined) {
       patch.rrnBack = data.rrnBack;
