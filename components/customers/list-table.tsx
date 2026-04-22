@@ -489,12 +489,10 @@ function renderCellContent(
       return c.name;
     case "birthDate":
       return formatDate(c.birthDate);
-    case "rrn": {
-      const front = c.rrnFront ?? "";
-      const back = c.rrnBack ?? "";
-      if (!front && !back) return "";
-      return `${front}${front && back ? "-" : ""}${back}`;
-    }
+    case "rrn":
+      // 엑셀 원본 포맷과 동일하게 뒷자리 7자리만 표시.
+      // 앞자리는 생년월일에서 파생되는 보조 데이터이므로 목록에 노출하지 않음.
+      return c.rrnBack ?? "";
     case "phone1":
       return canUnmaskPhone ? formatPhone(c.phone1) : maskPhone(c.phone1);
     case "job":

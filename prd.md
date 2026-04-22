@@ -5,7 +5,7 @@
 | 제품명 | **DB-CRM** (Customer & Data Management) |
 | 저장소 | https://github.com/Cayson-Choi/a1-insurance |
 | 작성일 | 2026-04-22 |
-| 버전 | 1.7 |
+| 버전 | 1.7.1 |
 | 상태 | 모든 기능 구현 완료 · Production build 통과 · 납품 문서 최신화 |
 
 > 이 문서는 제품이 무엇을 해야 하는지(요구사항)와 어떻게 만들고 있는지(기술·설계 결정)를 함께 담는다. 사양 변경 시 반드시 아래 "변경 이력"에 기록한다.
@@ -455,3 +455,4 @@ public/
 | 2026-04-20 | 1.5 | 엑셀 왕복 일관성 완벽 보정 (주민No 뒤 7자리만 · 변경 감지 기반 updatedAt 보존 · KST 시간대 명시 파싱/포맷) · 엑셀 업로드 정책 변경: **전체 교체** (트랜잭션 DELETE all → INSERT all, `created_at`/`updated_at` 엑셀 값 그대로 사용, `NOT NULL` 제약 해제 마이그 0007, 확인 다이얼로그) · 로그인 placeholder 제거 | 개발팀 |
 | 2026-04-21 | 1.6 | 상세 팝업 저장 실패 버그 수정 (disabled → readOnly, callResult 빈 문자열 처리, 메모 10K 자, 에러 토스트 상세화) · DB 보험료 표시 소수점 제거 · **성능 대폭 개선**: Vercel Function 리전을 Neon DB 와 동일한 `sin1` Singapore 로 이전 (DB 왕복 250ms → 5ms) + `React.cache` 로 요청당 인증·권한 중복 조회 제거 (`lib/auth/rbac.ts` `getSessionUser` / `getPermissions` 래핑) | 개발팀 |
 | 2026-04-22 | 1.7 | **팝업 UX 개선**: 등록일시/수정일시 표시 제거 · 주민번호 앞자리 입력 제거(생년월일에서 자동 파생) · 이미지 저장 시 스크롤 가려진 영역 전체 캡처 + 지사/본부/소속팀 제외. **권한 추가**: `canDownloadImage` 신설 (마이그 0008) — 이미지 저장 버튼 노출 제어. **일괄 변경 확장**: DB 등록일 일괄 변경 기능 추가 (admin 전용, bulk_change 감사로그). **울트라와이드 지원**: `(app)` 레이아웃의 `max-w-screen-2xl` 해제 → 21:9 (~3440px) 모니터에서 28컬럼 전체가 한 화면에 펼쳐짐. **데이터 무결성 fix**: UI 에서 rrnFront 입력 제거 후 빈 birthDate 저장 시 rrnFront 가 null 로 덮이던 회귀 수정. | 개발팀 |
+| 2026-04-22 | 1.7.1 | **주민No 표시 일관성**: 고객 목록의 `주민No` 컬럼을 엑셀 원본 포맷과 동일하게 뒷자리 7자리만 표시(정렬 키도 rrnBack 으로 통일). **DB 보험료 표시**: 팝업에 천단위 쉼표 포맷(`65,630`), blur 시 자동 재포맷. **감사로그 완전성 수정**: `updateCustomerAction` 스냅샷에 누락됐던 편집 가능 필드 8종 추가(생년월일·DB 보험료·소분류·DB 만기일·DB 등록일·지사·본부·소속팀). **감사 diff 라벨 보정**: `lib/audit/diff.ts` dead keys(`rrnFrontSet`/`rrnBackSet`) 제거 + 누락 라벨 11종 보강. **스키마 주석**: `rrnFront` 가 서버 derivation 전용임 명시. | 개발팀 |

@@ -101,6 +101,8 @@ export const UpdateCustomerSchema = z.object({
   dbRegisteredAt: optionalDate,
   reservationAt: optionalDateTime,
   memo: optionalMemo,
+  // rrnFront: UI 에서 입력 필드는 제거됨 — `birthDate` 로부터 서버(updateCustomerAction)에서 자동 파생.
+  // 이 스키마 엔트리는 엑셀 importer 재사용·혹시 모를 직접 FormData 전달 대비 유지.
   rrnFront: optionalRrnFront,
   rrnBack: optionalRrnBack,
   branch: optionalString,

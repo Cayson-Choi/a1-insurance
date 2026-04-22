@@ -699,11 +699,22 @@ export function DetailForm({
                 <Input
                   type="text"
                   name="dbPremium"
-                  /* DB numeric(14,2) 는 "55000.00" 반환 — Number 로 정규화하면 "55000"
-                   * 소수점이 실제로 의미 있으면(예 55000.5) 그대로 유지됨 */
-                  defaultValue={customer.dbPremium ? String(Number(customer.dbPremium)) : ""}
+                  /* DB numeric(14,2) → Number 정규화 후 천단위 쉼표 (엑셀 형식과 동일).
+                   * 저장 시 zod(optionalNumeric) 가 쉼표를 자동 제거. blur 에서도 재포맷. */
+                  defaultValue={
+                    customer.dbPremium
+                      ? Number(customer.dbPremium).toLocaleString("ko-KR")
+                      : ""
+                  }
+                  onBlur={(e) => {
+                    const raw = e.currentTarget.value.replace(/,/g, "").trim();
+                    if (!raw) return;
+                    const n = Number(raw);
+                    if (!Number.isFinite(n)) return;
+                    e.currentTarget.value = n.toLocaleString("ko-KR");
+                  }}
                   inputMode="numeric"
-                  placeholder="55000"
+                  placeholder="55,000"
                   className="h-10 tabular-nums"
                   readOnly={!canEdit}
                 />

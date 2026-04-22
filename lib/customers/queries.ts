@@ -102,7 +102,8 @@ function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[
       case "birthDate":
         return customers.birthDate;
       case "rrn":
-        return customers.rrnFront;
+        // 목록에 뒷자리만 표시하므로 정렬 키도 rrnBack 으로 일치
+        return customers.rrnBack;
       case "phone1":
         return customers.phone1;
       case "job":
