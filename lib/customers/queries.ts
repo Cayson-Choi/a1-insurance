@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, ilike, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
-import type { SessionUser } from "@/lib/auth/rbac";
+import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
 import { isSortDir, isSortKey, type SortDir, type SortKey } from "@/lib/customers/columns";
 function isValidRrnFront(s: string): boolean {
   return /^\d{6}$/.test(s);
@@ -156,7 +156,9 @@ function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[
 function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
   const conds: SQL[] = [];
 
-  if (user.role === "agent") {
+  // admin·manager 는 전체 조회 가능 (선택된 agent 필터만 적용).
+  // agent 는 본인 담당분만 보이도록 WHERE 절 강제.
+  if (!canSeeAllCustomers(user)) {
     conds.push(eq(customers.agentId, user.agentId));
   } else if (filter.agentId) {
     conds.push(eq(customers.agentId, filter.agentId));
@@ -287,10 +289,12 @@ export async function listCustomers(
 }
 
 export async function listAgents(): Promise<Array<{ agentId: string; name: string }>> {
+  // customer.agentId 로 지정 가능한 사용자 = agent + manager (관리자는 영업 라인이 아니므로 제외).
+  // 매니저도 본인 고객을 가질 수 있다는 요구사항 반영.
   const rows = await db
     .select({ agentId: users.agentId, name: users.name })
     .from(users)
-    .where(eq(users.role, "agent"))
+    .where(inArray(users.role, ["agent", "manager"]))
     .orderBy(users.agentId);
   return rows;
 }

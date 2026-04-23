@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Download } from "lucide-react";
-import { requireUserWithPerms } from "@/lib/auth/rbac";
+import {
+  requireUserWithPerms,
+  canSeeAllCustomers,
+  canReassignAgent,
+  isAdmin as isAdminRole,
+} from "@/lib/auth/rbac";
 import { listCustomers, listAgents, parseFilter } from "@/lib/customers/queries";
 import { SearchBar } from "@/components/customers/search-bar";
 import { ListTable } from "@/components/customers/list-table";
@@ -19,12 +24,18 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const user = await requireUserWithPerms();
   const params = await searchParams;
   const filter = parseFilter(params);
-  const isAdmin = user.role === "admin";
+  // 전체 조회 가능 여부 — admin 과 manager 는 다른 담당자 고객도 보임.
+  const canSeeAll = canSeeAllCustomers(user);
+  // 담당자 재할당(개별+일괄) 가능 여부 — admin 과 manager.
+  const canReassign = canReassignAgent(user);
+  // DB 등록일 일괄 변경은 관리자 전용(매니저 기본 권한에 포함 안 됨).
+  const canBulkDate = isAdminRole(user);
   const canExport = user.canExport;
 
   const [list, agents] = await Promise.all([
     listCustomers(filter, user),
-    isAdmin ? listAgents() : Promise.resolve([]),
+    // 담당자 필터 드롭다운은 "전체 조회 가능" 역할일 때만 의미 있음.
+    canSeeAll ? listAgents() : Promise.resolve([]),
   ]);
 
   const preservedQuery = new URLSearchParams(
@@ -43,7 +54,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">고객 목록</h1>
           <p className="text-sm text-muted-foreground">
-            {isAdmin
+            {canSeeAll
               ? "전체 고객 DB를 조회·편집할 수 있습니다."
               : "본인에게 배정된 고객 목록입니다."}
           </p>
@@ -63,15 +74,16 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       </div>
 
       <Suspense>
-        <SearchBar agents={agents} showAgentFilter={isAdmin} />
+        <SearchBar agents={agents} showAgentFilter={canSeeAll} />
       </Suspense>
 
       <ListTable
         rows={list.rows}
-        showAgentColumn={isAdmin}
+        showAgentColumn={canSeeAll}
         preservedQuery={preservedQuery}
         canUnmaskPhone={true}
-        canBulkEdit={isAdmin}
+        canBulkReassign={canReassign}
+        canBulkDate={canBulkDate}
         agents={agents}
         sort={filter.sort ?? null}
         dir={filter.dir ?? "asc"}

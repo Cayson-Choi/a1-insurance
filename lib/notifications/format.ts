@@ -31,7 +31,7 @@ export function fmtKST(d: Date): string {
 export type LoginNotifyInput = {
   agentId: string;
   name: string | null;
-  role: "admin" | "agent" | null;
+  role: "admin" | "manager" | "agent" | null;
   success: boolean;
   ip: string | null;
   userAgent: string | null;
@@ -50,8 +50,14 @@ export type ForceLogoutNotifyInput = {
 export function buildLoginText(input: LoginNotifyInput): string {
   const icon = input.success ? "🔐" : "🚨";
   const title = input.success ? "로그인 성공" : "로그인 실패";
+  const roleLabel =
+    input.role === "admin"
+      ? "관리자"
+      : input.role === "manager"
+        ? "매니저"
+        : "담당자";
   const who = input.success
-    ? `${input.name ?? "-"} (${input.agentId}) · ${input.role === "admin" ? "관리자" : "담당자"}`
+    ? `${input.name ?? "-"} (${input.agentId}) · ${roleLabel}`
     : `시도 ID: ${input.agentId || "(미입력)"}`;
   const lines: string[] = [
     `${icon} DB-CRM ${title}`,

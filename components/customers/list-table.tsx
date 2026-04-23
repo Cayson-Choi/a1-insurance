@@ -51,7 +51,10 @@ type Props = {
   showAgentColumn: boolean;
   preservedQuery: string;
   canUnmaskPhone: boolean;
-  canBulkEdit: boolean;
+  // 담당자 일괄 재할당(=매니저의 기본 권한 + admin). 체크박스 선택 + "담당자 일괄 변경" 버튼.
+  canBulkReassign: boolean;
+  // DB 등록일 일괄 변경(= admin 전용). "DB 등록일 일괄 변경" 버튼.
+  canBulkDate: boolean;
   agents: Array<{ agentId: string; name: string }>;
   sort: SortKey | null;
   dir: SortDir;
@@ -62,7 +65,8 @@ export function ListTable({
   showAgentColumn,
   preservedQuery,
   canUnmaskPhone,
-  canBulkEdit,
+  canBulkReassign,
+  canBulkDate,
   agents,
   sort,
   dir,
@@ -74,6 +78,9 @@ export function ListTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkDateOpen, setBulkDateOpen] = useState(false);
+
+  // 체크박스 컬럼은 어느 일괄 기능이든 하나라도 가능하면 노출.
+  const canBulkEdit = canBulkReassign || canBulkDate;
 
   // 보이는 컬럼만 추림 (admin 전용은 권한 없으면 제외)
   const visibleIds = useMemo(
@@ -274,24 +281,28 @@ export function ListTable({
           <span className="text-sm font-medium">
             <b className="text-brand-accent tabular-nums">{selected.size}</b>건 선택됨
           </span>
-          <Button
-            type="button"
-            size="sm"
-            className="bg-brand text-brand-foreground hover:bg-brand-hover"
-            onClick={() => setBulkOpen(true)}
-          >
-            <UserCog className="h-4 w-4" />
-            담당자 일괄 변경
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setBulkDateOpen(true)}
-          >
-            <CalendarClock className="h-4 w-4" />
-            DB 등록일 일괄 변경
-          </Button>
+          {canBulkReassign ? (
+            <Button
+              type="button"
+              size="sm"
+              className="bg-brand text-brand-foreground hover:bg-brand-hover"
+              onClick={() => setBulkOpen(true)}
+            >
+              <UserCog className="h-4 w-4" />
+              담당자 일괄 변경
+            </Button>
+          ) : null}
+          {canBulkDate ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkDateOpen(true)}
+            >
+              <CalendarClock className="h-4 w-4" />
+              DB 등록일 일괄 변경
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -305,24 +316,24 @@ export function ListTable({
         </div>
       ) : null}
 
-      {canBulkEdit ? (
-        <>
-          <BulkReassignDialog
-            open={bulkOpen}
-            onOpenChange={setBulkOpen}
-            selectedCount={selected.size}
-            selectedIds={selectedIds}
-            agents={agents}
-            onDone={clearSelection}
-          />
-          <BulkUpdateDateDialog
-            open={bulkDateOpen}
-            onOpenChange={setBulkDateOpen}
-            selectedCount={selected.size}
-            selectedIds={selectedIds}
-            onDone={clearSelection}
-          />
-        </>
+      {canBulkReassign ? (
+        <BulkReassignDialog
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          selectedCount={selected.size}
+          selectedIds={selectedIds}
+          agents={agents}
+          onDone={clearSelection}
+        />
+      ) : null}
+      {canBulkDate ? (
+        <BulkUpdateDateDialog
+          open={bulkDateOpen}
+          onOpenChange={setBulkDateOpen}
+          selectedCount={selected.size}
+          selectedIds={selectedIds}
+          onDone={clearSelection}
+        />
       ) : null}
     </>
   );

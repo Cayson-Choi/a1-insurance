@@ -19,7 +19,7 @@ const boolFlag = z
 export const CreateUserSchema = z.object({
   agentId: AgentIdSchema,
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
-  role: z.enum(["admin", "agent"]),
+  role: z.enum(["admin", "manager", "agent"]),
   password: PasswordSchema,
   canCreate: boolFlag,
   canEdit: boolFlag,
@@ -30,7 +30,7 @@ export const CreateUserSchema = z.object({
 
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력하세요.").max(60),
-  role: z.enum(["admin", "agent"]),
+  role: z.enum(["admin", "manager", "agent"]),
   canCreate: boolFlag,
   canEdit: boolFlag,
   canDelete: boolFlag,

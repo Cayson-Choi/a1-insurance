@@ -169,7 +169,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       if (token && session.user) {
         session.user.agentId = (token.agentId as string) ?? "";
-        session.user.role = (token.role as "admin" | "agent") ?? "agent";
+        session.user.role = (token.role as "admin" | "manager" | "agent") ?? "agent";
         session.user.name = (token.name as string) ?? session.user.name;
       }
       return session;

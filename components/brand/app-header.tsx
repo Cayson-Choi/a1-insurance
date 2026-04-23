@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Menu, Shield, UserRound } from "lucide-react";
+import { LogOut, Menu, Shield, ShieldCheck, UserRound } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logoutAction } from "@/lib/auth/actions";
 import type { SessionUser } from "@/lib/auth/rbac";
+import { roleLabel } from "@/lib/auth/roles";
 import { COMPANY } from "@/lib/company";
 
 const NAV = [
@@ -30,6 +31,8 @@ const ADMIN_NAV = [
 
 export function AppHeader({ user }: { user: SessionUser }) {
   const isAdmin = user.role === "admin";
+  const isManager = user.role === "manager";
+  // ADMIN_NAV 는 관리자 전용. 매니저는 고객 목록만 사용한다.
   const nav = isAdmin ? [...NAV, ...ADMIN_NAV] : NAV;
 
   return (
@@ -92,6 +95,11 @@ export function AppHeader({ user }: { user: SessionUser }) {
                   <Shield className="h-2.5 w-2.5" />
                   관리자
                 </Badge>
+              ) : isManager ? (
+                <Badge className="bg-brand-accent text-white hover:bg-brand-accent text-[10px] px-1.5 h-4 gap-0.5">
+                  <ShieldCheck className="h-2.5 w-2.5" />
+                  매니저
+                </Badge>
               ) : (
                 <Badge variant="secondary" className="text-[10px] px-1.5 h-4">
                   {user.agentId}
@@ -103,7 +111,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
                 <DropdownMenuLabel className="flex flex-col gap-0.5">
                   <span>{user.name ?? "사용자"}</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    ID {user.agentId} · {isAdmin ? "관리자" : "담당자"}
+                    ID {user.agentId} · {roleLabel(user.role)}
                   </span>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>

@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
-import { requireUserWithPerms } from "@/lib/auth/rbac";
+import {
+  requireUserWithPerms,
+  canReassignAgent,
+} from "@/lib/auth/rbac";
 import { getCustomerDetail, getDetailContext } from "@/lib/customers/get-detail";
 import { listAgents } from "@/lib/customers/queries";
 import { preserveQuery } from "@/lib/customers/preserve-query";
@@ -28,10 +31,11 @@ export default async function CustomerDetailModal({ params, searchParams }: Page
   const sp = await searchParams;
 
   const user = await requireUserWithPerms();
+  const canReassign = canReassignAgent(user);
   const [customer, context, agents] = await Promise.all([
     getCustomerDetail(id, user),
     getDetailContext(id, sp, user),
-    user.role === "admin" ? listAgents() : Promise.resolve([]),
+    canReassign ? listAgents() : Promise.resolve([]),
   ]);
 
   if (!customer) notFound();
@@ -45,7 +49,7 @@ export default async function CustomerDetailModal({ params, searchParams }: Page
       agents={agents}
       canEdit={user.canEdit}
       canDelete={user.canDelete}
-      canEditAgent={user.role === "admin"}
+      canEditAgent={canReassign}
       canDownloadImage={user.canDownloadImage}
       prevId={context.prevId}
       nextId={context.nextId}

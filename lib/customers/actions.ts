@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, auditLogs, users } from "@/lib/db/schema";
-import { requireUser, requireAdmin, getPermissions } from "@/lib/auth/rbac";
+import {
+  requireUser,
+  requireAdmin,
+  requireAdminOrManager,
+  getPermissions,
+  canSeeAllCustomers,
+  canReassignAgent,
+} from "@/lib/auth/rbac";
 import { UpdateCustomerSchema } from "@/lib/customers/schema";
 import {
   getCustomerDetail,
@@ -40,14 +47,16 @@ export async function updateCustomerAction(
     where: eq(customers.id, id),
   });
   if (!existing) return { ok: false, error: "고객을 찾을 수 없습니다." };
-  if (user.role === "agent" && existing.agentId !== user.agentId) {
+  // admin·manager 는 전체 고객 편집, agent 는 본인 담당분만.
+  if (!canSeeAllCustomers(user) && existing.agentId !== user.agentId) {
     return { ok: false, error: "해당 고객에 대한 권한이 없습니다." };
   }
 
   const data = parsed.data;
+  // 담당자 재할당은 매니저의 "기본 권한" — canEdit 플래그와 무관하게 admin 또는 manager 면 가능.
+  // (UI 에서는 매니저에게 canEdit 미부여 시에도 담당자 드롭다운은 열어두고, 나머지 필드는 readOnly 로 막힘.)
   const agentChange =
-    canFullEdit &&
-    user.role === "admin" &&
+    canReassignAgent(user) &&
     data.agentId !== undefined &&
     data.agentId !== existing.agentId;
 
@@ -101,9 +110,12 @@ export async function updateCustomerAction(
     if (data.rrnBack !== undefined) {
       patch.rrnBack = data.rrnBack;
     }
-    if (user.role === "admin" && data.agentId !== undefined) {
-      patch.agentId = data.agentId;
-    }
+  }
+
+  // 담당자 재할당은 canEdit 과 독립적: admin 은 물론, manager 도 (canEdit 미부여 상태에서)
+  // 오로지 담당자만 바꾸는 시나리오가 있어야 하므로 블록 밖에서 처리.
+  if (canReassignAgent(user) && data.agentId !== undefined) {
+    patch.agentId = data.agentId;
   }
 
   await db.update(customers).set(patch).where(eq(customers.id, id));
@@ -188,7 +200,8 @@ export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
     where: eq(customers.id, id),
   });
   if (!existing) return { ok: false, error: "고객을 찾을 수 없습니다." };
-  if (user.role === "agent" && existing.agentId !== user.agentId) {
+  // admin·manager 는 전체 대상 삭제 가능, agent 는 본인 담당분만.
+  if (!canSeeAllCustomers(user) && existing.agentId !== user.agentId) {
     return { ok: false, error: "해당 고객에 대한 권한이 없습니다." };
   }
 
@@ -222,7 +235,8 @@ export async function bulkReassignAction(
   customerIds: string[],
   targetAgentId: string | null,
 ): Promise<BulkResult> {
-  const actor = await requireAdmin();
+  // 담당자 일괄 재할당은 매니저의 기본 권한. admin 또는 manager 통과.
+  const actor = await requireAdminOrManager();
   if (!customerIds.length) return { ok: false, error: "선택된 고객이 없습니다." };
 
   const newAgent: string | null = targetAgentId && targetAgentId.trim() ? targetAgentId.trim() : null;

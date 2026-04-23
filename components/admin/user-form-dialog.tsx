@@ -32,7 +32,9 @@ export function UserFormDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [role, setRole] = useState<"admin" | "agent">(user?.role ?? "agent");
+  const [role, setRole] = useState<"admin" | "manager" | "agent">(
+    user?.role ?? "agent",
+  );
   const [canCreate, setCanCreate] = useState(user?.canCreate ?? false);
   const [canEdit, setCanEdit] = useState(user?.canEdit ?? false);
   const [canDelete, setCanDelete] = useState(user?.canDelete ?? false);
@@ -114,10 +116,13 @@ export function UserFormDialog({
               <Field label="역할" required>
                 <Select value={role} onValueChange={(v) => v && setRole(v as typeof role)}>
                   <SelectTrigger className="h-10 w-full">
-                    <span>{role === "admin" ? "관리자" : "담당자"}</span>
+                    <span>
+                      {role === "admin" ? "관리자" : role === "manager" ? "매니저" : "담당자"}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="agent">담당자</SelectItem>
+                    <SelectItem value="manager">매니저 — 전체 조회 + 담당자 변경</SelectItem>
                     <SelectItem value="admin">관리자</SelectItem>
                   </SelectContent>
                 </Select>
@@ -130,6 +135,10 @@ export function UserFormDialog({
                   </Label>
                   {role === "admin" ? (
                     <span className="text-[11px] text-brand-accent">관리자는 모든 권한 자동 부여</span>
+                  ) : role === "manager" ? (
+                    <span className="text-[11px] text-brand-accent">
+                      매니저는 전체 조회·담당자 변경 기본 + 아래 권한 추가 부여
+                    </span>
                   ) : (
                     <span className="text-[11px] text-muted-foreground">체크 안 된 항목은 제한됨</span>
                   )}

@@ -6,7 +6,7 @@ export type UserRow = {
   id: string;
   agentId: string;
   name: string;
-  role: "admin" | "agent";
+  role: "admin" | "manager" | "agent";
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;

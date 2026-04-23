@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
-import { requireUserWithPerms } from "@/lib/auth/rbac";
+import {
+  requireUserWithPerms,
+  canReassignAgent,
+} from "@/lib/auth/rbac";
 import { getCustomerDetail, getDetailContext } from "@/lib/customers/get-detail";
 import { listAgents } from "@/lib/customers/queries";
 import { preserveQuery } from "@/lib/customers/preserve-query";
@@ -20,10 +23,12 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   const sp = await searchParams;
 
   const user = await requireUserWithPerms();
+  // 담당자 드롭다운은 "담당자 재할당 가능" 역할(admin·manager)일 때만 필요.
+  const canReassign = canReassignAgent(user);
   const [customer, context, agents] = await Promise.all([
     getCustomerDetail(id, user),
     getDetailContext(id, sp, user),
-    user.role === "admin" ? listAgents() : Promise.resolve([]),
+    canReassign ? listAgents() : Promise.resolve([]),
   ]);
 
   if (!customer) notFound();
@@ -40,7 +45,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
         agents={agents}
         canEdit={user.canEdit}
         canDelete={user.canDelete}
-        canEditAgent={user.role === "admin"}
+        canEditAgent={canReassign}
         canDownloadImage={user.canDownloadImage}
         prevHref={prevHref}
         nextHref={nextHref}

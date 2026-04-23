@@ -2,7 +2,7 @@ import { and, desc, eq, ilike, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users, type Customer } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
-import type { SessionUser } from "@/lib/auth/rbac";
+import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
 import { parseFilter, type CustomerFilter } from "@/lib/customers/queries";
 
 export type CustomerDetail = Customer & {
@@ -24,7 +24,8 @@ function parseCallResult(v: unknown): CallResult | undefined {
 
 function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
   const conds: SQL[] = [];
-  if (user.role === "agent") {
+  // admin·manager 는 전체 조회, agent 는 본인 것만.
+  if (!canSeeAllCustomers(user)) {
     conds.push(eq(customers.agentId, user.agentId));
   } else if (filter.agentId) {
     conds.push(eq(customers.agentId, filter.agentId));
@@ -62,7 +63,8 @@ export async function getCustomerDetail(
 
   const row = rows[0];
   if (!row) return null;
-  if (user.role === "agent" && row.customer.agentId !== user.agentId) return null;
+  // admin·manager 는 모든 담당자의 고객 열람 가능, agent 는 본인 담당만.
+  if (!canSeeAllCustomers(user) && row.customer.agentId !== user.agentId) return null;
 
   return {
     ...row.customer,

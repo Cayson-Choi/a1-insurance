@@ -23,7 +23,12 @@ export const callResultEnum = pgEnum("call_result", [
   "민원",
 ]);
 
-export const roleEnum = pgEnum("user_role", ["admin", "agent"]);
+// "manager" 역할: admin 과 agent 사이의 중간 계급.
+// - 모든 담당자의 고객을 조회 가능 (agent-scope 쿼리 WHERE 필터 우회)
+// - 고객의 담당자(agentId)를 개별/일괄 변경 가능
+// - 관리자 전용 페이지(users/excel/audit/logins)는 접근 불가
+// - 나머지 권한(canCreate/Edit/Delete/Export/DownloadImage)은 agent 와 동일하게 플래그 기반
+export const roleEnum = pgEnum("user_role", ["admin", "manager", "agent"]);
 
 export const auditActionEnum = pgEnum("audit_action", [
   "agent_change",

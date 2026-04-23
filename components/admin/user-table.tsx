@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit3, KeyRound, LogOut, Shield, Trash2, UserRound } from "lucide-react";
+import { Edit3, KeyRound, LogOut, Shield, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -76,6 +76,11 @@ export function UserTable({
                       <Shield className="h-3 w-3" />
                       관리자
                     </Badge>
+                  ) : u.role === "manager" ? (
+                    <Badge className="bg-brand-accent text-white hover:bg-brand-accent gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      매니저
+                    </Badge>
                   ) : (
                     <Badge variant="secondary" className="gap-1">
                       <UserRound className="h-3 w-3" />
@@ -88,6 +93,13 @@ export function UserTable({
                     <span className="text-xs text-muted-foreground">전체 권한</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
+                      {/* 매니저 기본 권한: 전체 조회 + 담당자 변경 — 뱃지로 항상 on 표시 */}
+                      {u.role === "manager" ? (
+                        <>
+                          <PermBadge label="전체조회" on={true} />
+                          <PermBadge label="담당자변경" on={true} />
+                        </>
+                      ) : null}
                       <PermBadge label="입력" on={u.canCreate} />
                       <PermBadge label="수정" on={u.canEdit} />
                       <PermBadge label="삭제" on={u.canDelete} />
