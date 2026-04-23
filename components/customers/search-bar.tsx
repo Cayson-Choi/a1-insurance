@@ -155,8 +155,7 @@ export function SearchBar({
           value={callResult || ALL}
           onValueChange={(v) => setCallResult(!v || v === ALL ? "" : String(v))}
         >
-          {/* py-1 : SelectTrigger 기본 py-2 로 인해 같은 h-9 에서 Input 과 텍스트 베이스라인이 어긋나던 버그 보정 */}
-          <SelectTrigger className="h-9 py-1 w-full">
+          <SelectTrigger className="h-9 w-full">
             <span className="truncate">{callResult || "전체"}</span>
           </SelectTrigger>
           <SelectContent>
@@ -176,7 +175,7 @@ export function SearchBar({
             value={agentId || ALL}
             onValueChange={(v) => setAgentId(!v || v === ALL ? "" : String(v))}
           >
-            <SelectTrigger className="h-9 py-1 w-full">
+            <SelectTrigger className="h-9 w-full">
               <span className="truncate">
                 {agentId
                   ? `${agents.find((a) => a.agentId === agentId)?.name ?? agentId} · ${agentId}`
