@@ -158,7 +158,11 @@ export function SearchBar({
           <SelectTrigger className="h-9 w-full">
             <span className="truncate">{callResult || "전체"}</span>
           </SelectTrigger>
-          <SelectContent>
+          {/*
+            min-w-0 : shadcn SelectContent 기본 min-w-36(144px)이 트리거 폭(w-28=112px)보다 커서
+            드롭다운이 트리거보다 넓게 벌어지던 문제 보정. w-(--anchor-width) 만 적용되어 트리거와 동일 폭.
+          */}
+          <SelectContent className="min-w-0">
             <SelectItem value={ALL}>전체</SelectItem>
             {CALL_RESULTS.map((r) => (
               <SelectItem key={r} value={r}>
