@@ -731,12 +731,16 @@ export function DetailForm({
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="예약일시" error={err("reservationAt")}>
+                {/*
+                  예약일시는 방문주소·메모·통화결과와 함께 담당자의 "기본 편집 필드".
+                  canEdit 권한 없어도 영업 현장에서 예약 잡을 수 있도록 readOnly 해제.
+                  서버 whitelist 도 updateCustomerAction 에서 함께 허용.
+                */}
                 <Input
                   type="datetime-local"
                   name="reservationAt"
                   defaultValue={toDateTimeLocal(customer.reservationAt)}
                   className="h-10 tabular-nums"
-                  readOnly={!canEdit}
                 />
               </Field>
               <div />

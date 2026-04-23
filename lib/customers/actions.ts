@@ -67,7 +67,8 @@ export async function updateCustomerAction(
     if (!target) return { ok: false, error: "존재하지 않는 담당자ID 입니다." };
   }
 
-  // canEdit 있으면 모든 필드, 없으면 방문주소·메모·통화결과만 화이트리스트
+  // canEdit 있으면 모든 필드, 없으면 방문주소·메모·통화결과·예약일시만 화이트리스트
+  // (영업 현장에서 권한 없는 담당자도 전화통화 중 즉시 예약을 잡을 수 있어야 함.)
   const patch: Partial<typeof customers.$inferInsert> = canFullEdit
     ? {
         name: data.name,
@@ -95,6 +96,7 @@ export async function updateCustomerAction(
         addressDetail: data.addressDetail,
         callResult: data.callResult ?? null,
         memo: data.memo,
+        reservationAt: data.reservationAt ? new Date(data.reservationAt) : null,
         updatedAt: new Date(),
       };
 
