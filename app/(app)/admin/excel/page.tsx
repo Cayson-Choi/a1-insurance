@@ -19,7 +19,7 @@ export default async function AdminExcelPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">엑셀 업/다운로드</h1>
         <p className="text-sm text-muted-foreground">
-          기존 `고객명부.xlsx` 포맷(28컬럼) 그대로 주고받습니다. 업로드는 고객코드No 기준 upsert·다운로드는 전체 컬럼 포함.
+          기존 `고객명부.xlsx` 포맷(28컬럼) 그대로 주고받습니다. 업로드는 <b>고객코드 → 주민번호 → 이름+전화</b> 순 upsert — 엑셀의 빈 셀은 기존 값 보존, 엑셀에 없는 기존 고객은 유지됩니다.
         </p>
       </div>
 

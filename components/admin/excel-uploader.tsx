@@ -4,7 +4,13 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { toast } from "sonner";
-import { Loader2, UploadCloud, CheckCircle2, FileSpreadsheet, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  UploadCloud,
+  CheckCircle2,
+  FileSpreadsheet,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type PreviewSampleRow = {
@@ -23,6 +29,11 @@ type PreviewResult = {
   existingCount: number;
   invalidCount: number;
   unknownAgentCount: number;
+  willUpdate: number;
+  willInsert: number;
+  matchedCode: number;
+  matchedRrn: number;
+  matchedNamePhone: number;
   previewSample: PreviewSampleRow[];
   headerErrors?: string[];
 };
@@ -30,13 +41,17 @@ type PreviewResult = {
 type ApplyResult = {
   ok: boolean;
   total: number;
-  deletedCount: number;
+  existingTotal: number;
+  updated: number;
+  unchanged: number;
   inserted: number;
+  untouched: number;
+  matchedCode: number;
+  matchedRrn: number;
+  matchedNamePhone: number;
   skipped: number;
   invalidCount: number;
   unknownAgentCount: number;
-  rrnBackCount?: number;
-  rrnFrontCount?: number;
 };
 
 export function ExcelUploader() {
@@ -73,9 +88,7 @@ export function ExcelUploader() {
       } else {
         const r = json as ApplyResult;
         toast.success(
-          `교체 완료: 기존 ${r.deletedCount}건 삭제 · 신규 ${r.inserted}건 입력${
-            r.skipped ? ` · 건너뜀 ${r.skipped}건` : ""
-          }`,
+          `업로드 완료: 업데이트 ${r.updated}건 · 신규 ${r.inserted}건 · 기존 유지 ${r.untouched}건`,
           { duration: 6000 },
         );
         setPreview(null);
@@ -103,7 +116,10 @@ export function ExcelUploader() {
           {file ? file.name : "엑셀 파일(.xlsx) 선택"}
         </div>
         <div className="text-xs text-muted-foreground">
-          28컬럼 포맷 · 최대 10MB · <b className="text-destructive">업로드 시 기존 고객 데이터 전부 교체</b>
+          28컬럼 포맷 · 최대 10MB ·{" "}
+          <b className="text-brand-accent">
+            Upsert (고객코드 → 주민번호 → 이름+전화 매칭 후 업데이트, 나머지는 신규 추가)
+          </b>
         </div>
         <input
           ref={inputRef}
@@ -135,7 +151,7 @@ export function ExcelUploader() {
         </Button>
         <Button
           type="button"
-          className="bg-destructive text-white hover:bg-destructive/90"
+          className="bg-brand text-brand-foreground hover:bg-brand-hover"
           onClick={() => {
             if (!preview?.ok) {
               toast.error("먼저 '미리보기'로 파일을 검증하세요.");
@@ -172,12 +188,37 @@ export function ExcelUploader() {
           <div className="flex flex-wrap gap-4 text-sm">
             <Stat label="기존 DB" value={preview.existingCount} />
             <Stat label="엑셀" value={preview.total} />
-            <Stat label="오류 행" value={preview.invalidCount} danger={preview.invalidCount > 0} />
-            <Stat label="미등록 담당자" value={preview.unknownAgentCount} danger={preview.unknownAgentCount > 0} />
+            <Stat
+              label="업데이트 예정"
+              value={preview.willUpdate}
+              tone="accent"
+            />
+            <Stat label="신규 예정" value={preview.willInsert} tone="accent" />
+            <Stat
+              label="기존 유지 예정"
+              value={Math.max(0, preview.existingCount - preview.willUpdate)}
+            />
+            <Stat
+              label="오류 행"
+              value={preview.invalidCount}
+              danger={preview.invalidCount > 0}
+            />
+            <Stat
+              label="미등록 담당자"
+              value={preview.unknownAgentCount}
+              danger={preview.unknownAgentCount > 0}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+            <span>매칭 내역:</span>
+            <span>고객코드 <b className="tabular-nums">{preview.matchedCode}</b>건</span>
+            <span>주민번호 <b className="tabular-nums">{preview.matchedRrn}</b>건</span>
+            <span>이름+전화 <b className="tabular-nums">{preview.matchedNamePhone}</b>건</span>
           </div>
           {preview.unknownAgentCount > 0 ? (
             <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs">
-              ⚠ 엑셀의 담당자ID 중 사용자 DB에 없는 값이 있습니다. 해당 행은 담당자 <b>미배정</b>으로 저장됩니다. 사용자 관리 페이지에서 먼저 등록하는 걸 권장합니다.
+              ⚠ 엑셀의 담당자ID 중 사용자 DB에 없는 값이 있습니다. 해당 행은 담당자{" "}
+              <b>미배정</b>으로 저장됩니다. 사용자 관리 페이지에서 먼저 등록하는 걸 권장합니다.
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-md border">
@@ -196,7 +237,9 @@ export function ExcelUploader() {
               <tbody>
                 {preview.previewSample.map((r) => (
                   <tr key={r.rowNumber} className="border-t">
-                    <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.rowNumber}</td>
+                    <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
+                      {r.rowNumber}
+                    </td>
                     <td className="px-2 py-1.5 font-medium">{r.name}</td>
                     <td className="px-2 py-1.5 font-mono">{r.agentId ?? "—"}</td>
                     <td className="px-2 py-1.5 font-mono">{r.phone1 ?? "—"}</td>
@@ -214,29 +257,58 @@ export function ExcelUploader() {
         </div>
       ) : null}
 
-      {/* 교체 확인 다이얼로그 */}
+      {/* 업로드 확인 다이얼로그 */}
       <DialogPrimitive.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-open:animate-in data-open:fade-in-0" />
           <DialogPrimitive.Popup className="fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
             <div className="flex items-center gap-2 border-b px-5 py-3">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <CheckCircle2 className="h-5 w-5 text-brand-accent" />
               <DialogPrimitive.Title className="text-base font-semibold">
-                전체 데이터 교체
+                엑셀 업로드 확인
               </DialogPrimitive.Title>
             </div>
             <div className="space-y-3 px-5 py-4 text-sm">
-              <div className="rounded-md bg-muted/50 px-3 py-2 tabular-nums">
-                현재 DB: <b>{preview?.existingCount?.toLocaleString("ko-KR") ?? "-"}</b>건 · 엑셀: <b>{preview?.total?.toLocaleString("ko-KR") ?? "-"}</b>건
+              <div className="rounded-md bg-muted/50 px-3 py-2 tabular-nums space-y-1">
+                <div>
+                  현재 DB: <b>{preview?.existingCount?.toLocaleString("ko-KR") ?? "-"}</b>건 ·
+                  엑셀: <b>{preview?.total?.toLocaleString("ko-KR") ?? "-"}</b>건
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  예상 결과 → 업데이트{" "}
+                  <b className="text-brand-accent">
+                    {preview?.willUpdate?.toLocaleString("ko-KR") ?? "-"}
+                  </b>
+                  건 · 신규{" "}
+                  <b className="text-brand-accent">
+                    {preview?.willInsert?.toLocaleString("ko-KR") ?? "-"}
+                  </b>
+                  건 · 기존 유지{" "}
+                  <b>
+                    {(preview
+                      ? Math.max(0, preview.existingCount - preview.willUpdate)
+                      : 0
+                    ).toLocaleString("ko-KR")}
+                  </b>
+                  건
+                </div>
               </div>
               <div className="text-muted-foreground">
-                업로드를 실행하면 <b className="text-destructive">현재 DB 의 고객 데이터가 모두 삭제</b>되고 엑셀의 내용으로 완전히 교체됩니다.
+                엑셀의 각 행은{" "}
+                <b>고객코드 → 주민번호(앞+뒤) → 이름+전화1</b> 순서로 기존 고객과 매칭됩니다.
+                매칭되면 <b>해당 필드만 업데이트</b>, 매칭되지 않으면 <b>신규 추가</b>.
               </div>
               <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1">
-                <li>삭제 후 복구 불가 — 엑셀 백업 파일 보관 권장</li>
-                <li>웹에서 최근 편집한 내용이 있다면 <b>손실</b>될 수 있음</li>
-                <li>변경 이력(감사로그) 은 그대로 보존됨</li>
-                <li>담당자·로그인 이력은 영향 없음</li>
+                <li>
+                  엑셀의 <b>빈 셀</b>은 기존 값을 그대로 <b>보존</b>합니다 (덮어쓰지 않음)
+                </li>
+                <li>
+                  웹 전용 필드(<b>메모 · 예약일시</b>)는 엑셀에 없어 항상 보존됩니다
+                </li>
+                <li>
+                  엑셀에 없는 <b>기존 고객은 삭제되지 않고 그대로 유지</b>됩니다
+                </li>
+                <li>중간 실패 시 전체 롤백 — 부분 반영 없음</li>
               </ul>
             </div>
             <div className="flex justify-end gap-2 border-t bg-sidebar/40 px-5 py-3">
@@ -250,7 +322,7 @@ export function ExcelUploader() {
               </Button>
               <Button
                 type="button"
-                className="bg-destructive text-white hover:bg-destructive/90"
+                className="bg-brand text-brand-foreground hover:bg-brand-hover"
                 onClick={() => request("apply")}
                 disabled={mode === "apply"}
               >
@@ -259,7 +331,7 @@ export function ExcelUploader() {
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                교체 실행
+                업로드 실행
               </Button>
             </div>
           </DialogPrimitive.Popup>
@@ -269,16 +341,26 @@ export function ExcelUploader() {
   );
 }
 
-function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+function Stat({
+  label,
+  value,
+  danger,
+  tone,
+}: {
+  label: string;
+  value: number;
+  danger?: boolean;
+  tone?: "accent";
+}) {
+  const color = danger
+    ? "text-destructive"
+    : tone === "accent"
+      ? "text-brand-accent"
+      : "text-foreground";
   return (
     <div className="flex items-baseline gap-1.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        className={
-          "text-base font-bold tabular-nums " +
-          (danger ? "text-destructive" : "text-foreground")
-        }
-      >
+      <span className={`text-base font-bold tabular-nums ${color}`}>
         {value.toLocaleString("ko-KR")}
       </span>
     </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { customers, users } from "@/lib/db/schema";
+import { customers } from "@/lib/db/schema";
 import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseCustomersWorkbook } from "@/lib/excel/importer";
 import {
@@ -10,10 +10,18 @@ import {
   extractRrnBackRaw,
   parseDateTimeCell,
 } from "@/lib/excel/column-map";
-import type { NewCustomer } from "@/lib/db/schema";
+import type { NewCustomer, Customer } from "@/lib/db/schema";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/**
+ * 전화번호 정규화: 숫자만 추출. 이름+전화1 매칭에서 사용.
+ */
+function normalizePhone(p: string | null | undefined): string {
+  if (!p) return "";
+  return p.replace(/\D/g, "");
+}
 
 export async function POST(req: NextRequest) {
   const me = await requireUser();
@@ -69,89 +77,267 @@ export async function POST(req: NextRequest) {
     if (row.errors.length) invalidCount++;
   }
 
-  const previewSample = parsed.rows.slice(0, 10).map((r) => ({
-    rowNumber: r.rowNumber,
-    name: r.customer.name,
-    agentId: r.customer.agentId,
-    phone1: r.customer.phone1,
-    address: r.customer.address,
-    callResult: r.customer.callResult,
-    errors: r.errors,
-  }));
-
-  // preview: 기존 DB 고객 수 포함 (확인 다이얼로그에 표시용)
+  // preview: 기존 DB 고객 수 + 예상 매칭 시뮬레이션
   if (mode === "preview") {
     const [{ count: existingCount }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(customers);
+
+    // 매칭 시뮬레이션: DB 를 읽어서 엑셀 행마다 어떤 키로 매칭될지 카운트만 계산 (쓰기 없음)
+    const allExisting = await db.select().from(customers);
+    const byCode = new Map<string, Customer>();
+    const byRrn = new Map<string, Customer>();
+    const byNamePhone = new Map<string, Customer>();
+    for (const c of allExisting) {
+      if (c.customerCode) byCode.set(c.customerCode, c);
+      if (c.rrnFront && c.rrnBack) byRrn.set(`${c.rrnFront}|${c.rrnBack}`, c);
+      if (c.name && c.phone1) {
+        byNamePhone.set(`${c.name}|${normalizePhone(c.phone1)}`, c);
+      }
+    }
+
+    let willUpdate = 0;
+    let willInsert = 0;
+    let matchedCode = 0;
+    let matchedRrn = 0;
+    let matchedNamePhone = 0;
+    for (const row of parsed.rows) {
+      if (!row.customer.name || row.customer.name === "이름없음") continue;
+      const c = row.customer;
+      const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
+      const rrnBack = extractRrnBackRaw(row.raw);
+      if (c.customerCode && byCode.has(c.customerCode)) {
+        willUpdate++;
+        matchedCode++;
+      } else if (rrnFront && rrnBack && byRrn.has(`${rrnFront}|${rrnBack}`)) {
+        willUpdate++;
+        matchedRrn++;
+      } else if (
+        c.name &&
+        c.phone1 &&
+        byNamePhone.has(`${c.name}|${normalizePhone(c.phone1)}`)
+      ) {
+        willUpdate++;
+        matchedNamePhone++;
+      } else {
+        willInsert++;
+      }
+    }
+
+    const previewSample = parsed.rows.slice(0, 10).map((r) => ({
+      rowNumber: r.rowNumber,
+      name: r.customer.name,
+      agentId: r.customer.agentId,
+      phone1: r.customer.phone1,
+      address: r.customer.address,
+      callResult: r.customer.callResult,
+      errors: r.errors,
+    }));
+
     return NextResponse.json({
       ok: true,
       total: parsed.total,
       existingCount,
       invalidCount,
       unknownAgentCount,
+      willUpdate,
+      willInsert,
+      matchedCode,
+      matchedRrn,
+      matchedNamePhone,
       previewSample,
     });
   }
 
-  // apply — 전체 교체: 기존 customers 전부 삭제 후 엑셀의 행들을 새로 INSERT.
-  //   · 트랜잭션으로 감싸서 중간 실패 시 기존 데이터 보존
-  //   · 등록일/수정일 은 엑셀 값 그대로 사용 (빈 셀이면 NULL — NOT NULL 제약은 마이그 0007 에서 해제됨)
-  //   · audit_logs 는 customer_id FK(ON DELETE SET NULL)로 남아있음 — 과거 이력 보존
+  // apply — upsert 전략
+  //   1) 사전 로드: 고객코드 · 주민번호(앞+뒤) · 이름+전화1 세 가지 맵
+  //   2) 엑셀 각 행마다 우선순위로 매칭
+  //      code → rrn → namePhone → INSERT
+  //   3) UPDATE 시 빈 값(null) 은 patch 에서 제외 → 엑셀 빈 셀 = 기존 값 보존
+  //      memo / reservationAt / createdAt 은 엑셀에 없는 웹 전용 필드이므로 무조건 건드리지 않음
+  //   4) 전체 트랜잭션으로 감싸 일관성 유지. 중간 실패 시 모두 롤백.
+  let updated = 0;
+  let unchanged = 0;
   let inserted = 0;
-  let rrnBackCount = 0;
-  let rrnFrontCount = 0;
-  let deletedCount = 0;
+  let matchedCode = 0;
+  let matchedRrn = 0;
+  let matchedNamePhone = 0;
+  let skipped = 0;
+  let existingTotal = 0;
 
-  await db.transaction(async (tx) => {
-    // 1) 전체 삭제
-    const deleted = await tx.delete(customers).returning({ id: customers.id });
-    deletedCount = deleted.length;
+  try {
+    await db.transaction(async (tx) => {
+      const allExisting = await tx.select().from(customers);
+      existingTotal = allExisting.length;
 
-    // 2) 엑셀의 모든 유효 행 INSERT
-    for (const row of parsed.rows) {
-      if (!row.customer.name || row.customer.name === "이름없음") continue;
-
-      const c: Partial<NewCustomer> & typeof row.customer = { ...row.customer };
-      if (c.agentId && !validAgentIds.has(c.agentId)) c.agentId = null;
-
-      // 주민번호 뒷자리
-      const rrnBack = extractRrnBackRaw(row.raw);
-      if (rrnBack) {
-        c.rrnBack = rrnBack;
-        rrnBackCount++;
-      }
-      // 주민번호 앞자리 (생년월일에서 파생)
-      const front = birthDateToFrontYymmdd(row.customer.birthDate ?? null);
-      if (front) {
-        c.rrnFront = front;
-        rrnFrontCount++;
+      const byCode = new Map<string, Customer>();
+      const byRrn = new Map<string, Customer>();
+      const byNamePhone = new Map<string, Customer>();
+      for (const c of allExisting) {
+        if (c.customerCode) byCode.set(c.customerCode, c);
+        if (c.rrnFront && c.rrnBack) byRrn.set(`${c.rrnFront}|${c.rrnBack}`, c);
+        if (c.name && c.phone1) {
+          byNamePhone.set(`${c.name}|${normalizePhone(c.phone1)}`, c);
+        }
       }
 
-      // 엑셀의 "등록일" / "수정일[]" 값 — 빈 셀이면 null, drizzle 이 SQL NULL 로 저장.
-      // defaultNow() 를 우회하려면 명시적으로 null 전달 필요 (undefined 면 DB 기본값 NOW() 적용됨).
-      const excelCreatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.createdAtRaw]);
-      const excelUpdatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.updatedAtRaw]);
+      for (const row of parsed.rows) {
+        if (!row.customer.name || row.customer.name === "이름없음") {
+          skipped++;
+          continue;
+        }
 
-      await tx.insert(customers).values({
-        ...c,
-        createdAt: excelCreatedAt,
-        updatedAt: excelUpdatedAt,
-      } as NewCustomer);
-      inserted++;
-    }
-  });
+        const c = { ...row.customer };
+        if (c.agentId && !validAgentIds.has(c.agentId)) c.agentId = null;
 
-  void users; // ts: keep import
+        const rrnBack = extractRrnBackRaw(row.raw);
+        const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
+
+        // --- 매칭 ---
+        let existing: Customer | undefined;
+        if (c.customerCode && byCode.has(c.customerCode)) {
+          existing = byCode.get(c.customerCode);
+          matchedCode++;
+        } else if (rrnFront && rrnBack && byRrn.has(`${rrnFront}|${rrnBack}`)) {
+          existing = byRrn.get(`${rrnFront}|${rrnBack}`);
+          matchedRrn++;
+        } else if (c.name && c.phone1) {
+          const np = `${c.name}|${normalizePhone(c.phone1)}`;
+          if (byNamePhone.has(np)) {
+            existing = byNamePhone.get(np);
+            matchedNamePhone++;
+          }
+        }
+
+        if (existing) {
+          // --- UPDATE: 빈 값은 제외 (기존 값 보존).
+          // memo, reservationAt, createdAt 은 엑셀에 없으므로 건드리지 않음.
+          const patch: Partial<NewCustomer> = {};
+          const setIf = <K extends keyof NewCustomer>(
+            key: K,
+            value: NewCustomer[K] | null | undefined,
+          ) => {
+            if (value !== null && value !== undefined) {
+              patch[key] = value as NewCustomer[K];
+            }
+          };
+          setIf("customerCode", c.customerCode);
+          setIf("agentId", c.agentId);
+          setIf("name", c.name);
+          setIf("birthDate", c.birthDate);
+          setIf("phone1", c.phone1);
+          setIf("job", c.job);
+          setIf("address", c.address);
+          setIf("addressDetail", c.addressDetail);
+          setIf("callResult", c.callResult);
+          setIf("dbProduct", c.dbProduct);
+          setIf("dbPremium", c.dbPremium);
+          setIf("dbHandler", c.dbHandler);
+          setIf("subCategory", c.subCategory);
+          setIf("dbPolicyNo", c.dbPolicyNo);
+          setIf("dbRegisteredAt", c.dbRegisteredAt);
+          setIf("mainCategory", c.mainCategory);
+          setIf("dbStartAt", c.dbStartAt);
+          setIf("dbEndAt", c.dbEndAt);
+          setIf("branch", c.branch);
+          setIf("hq", c.hq);
+          setIf("team", c.team);
+          setIf("fax", c.fax);
+          setIf("reservationReceived", c.reservationReceived);
+          setIf("dbCompany", c.dbCompany);
+          if (rrnBack) patch.rrnBack = rrnBack;
+          if (rrnFront) patch.rrnFront = rrnFront;
+
+          if (Object.keys(patch).length > 0) {
+            patch.updatedAt = new Date();
+            await tx.update(customers).set(patch).where(eq(customers.id, existing.id));
+            updated++;
+          } else {
+            unchanged++;
+          }
+        } else {
+          // --- INSERT (신규)
+          const excelCreatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.createdAtRaw]);
+          const excelUpdatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.updatedAtRaw]);
+
+          const insertValues: NewCustomer = {
+            customerCode: c.customerCode ?? null,
+            agentId: c.agentId ?? null,
+            name: c.name,
+            birthDate: c.birthDate ?? null,
+            phone1: c.phone1 ?? null,
+            job: c.job ?? null,
+            address: c.address ?? null,
+            addressDetail: c.addressDetail ?? null,
+            callResult: c.callResult ?? null,
+            dbProduct: c.dbProduct ?? null,
+            dbPremium: c.dbPremium ?? null,
+            dbHandler: c.dbHandler ?? null,
+            subCategory: c.subCategory ?? null,
+            dbPolicyNo: c.dbPolicyNo ?? null,
+            dbRegisteredAt: c.dbRegisteredAt ?? null,
+            mainCategory: c.mainCategory ?? null,
+            dbStartAt: c.dbStartAt ?? null,
+            dbEndAt: c.dbEndAt ?? null,
+            branch: c.branch ?? null,
+            hq: c.hq ?? null,
+            team: c.team ?? null,
+            fax: c.fax ?? null,
+            reservationReceived: c.reservationReceived ?? null,
+            dbCompany: c.dbCompany ?? null,
+            rrnFront: rrnFront ?? null,
+            rrnBack: rrnBack ?? null,
+            createdAt: excelCreatedAt ?? new Date(),
+            updatedAt: excelUpdatedAt ?? new Date(),
+          };
+
+          const [created] = await tx
+            .insert(customers)
+            .values(insertValues)
+            .returning();
+          inserted++;
+
+          // 같은 엑셀 안에 동일 식별자 가진 행이 또 나올 수 있으니 맵 업데이트 → 두 번째 행부터 UPDATE 로 빠짐
+          if (created) {
+            if (created.customerCode) byCode.set(created.customerCode, created);
+            if (created.rrnFront && created.rrnBack) {
+              byRrn.set(`${created.rrnFront}|${created.rrnBack}`, created);
+            }
+            if (created.name && created.phone1) {
+              byNamePhone.set(
+                `${created.name}|${normalizePhone(created.phone1)}`,
+                created,
+              );
+            }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error("[import] upsert transaction failed:", e);
+    const msg =
+      e instanceof Error
+        ? e.message
+        : "업로드 중 오류가 발생했습니다. 엑셀을 확인하고 다시 시도하세요.";
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
+
+  // 엑셀에 매칭 안 된 기존 고객 = 그대로 유지됨
+  const untouched = existingTotal - (updated + unchanged);
+
   return NextResponse.json({
     ok: true,
     total: parsed.total,
-    deletedCount,
+    existingTotal,
+    updated,
+    unchanged,
     inserted,
-    skipped: parsed.total - inserted,
+    untouched,
+    matchedCode,
+    matchedRrn,
+    matchedNamePhone,
+    skipped,
     invalidCount,
     unknownAgentCount,
-    rrnBackCount,
-    rrnFrontCount,
   });
 }
