@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
+import { PreventBrowserSave } from "@/components/shortcuts/prevent-browser-save";
 import "./globals.css";
 
 // OG 이미지·링크 프리뷰 용 절대 URL 기준.
@@ -52,6 +53,9 @@ export default function RootLayout({
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        {/* 전역: Ctrl+S/Cmd+S 의 "페이지 저장" 브라우저 기본 동작 차단.
+            팝업 상세 폼의 내부 단축키 핸들러는 그대로 동작(전파 막지 않음). */}
+        <PreventBrowserSave />
         {children}
         <Toaster richColors position="top-right" closeButton />
       </body>
