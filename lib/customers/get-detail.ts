@@ -1,9 +1,9 @@
-import { and, desc, eq, ilike, SQL, sql } from "drizzle-orm";
+import { and, eq, ilike, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users, type Customer } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
-import { parseFilter, type CustomerFilter } from "@/lib/customers/queries";
+import { parseFilter, buildOrderBy, type CustomerFilter } from "@/lib/customers/queries";
 
 export type CustomerDetail = Customer & {
   agentName: string | null;
@@ -81,11 +81,15 @@ export async function getDetailContext(
   const where = buildWhere(filter, user);
   const offset = (filter.page - 1) * filter.perPage;
 
+  // 목록 페이지의 정렬(buildOrderBy)과 동일하게 맞춰야 prev/next 가 시각 순서와 일치.
+  // 하드코딩된 정렬을 쓰면 사용자가 다른 컬럼으로 정렬했을 때 findIndex 실패 → 이전/다음 둘 다 비활성화 되는 버그 발생.
+  const orderBy = buildOrderBy(filter.sort, filter.dir);
+
   const pageRows = await db
     .select({ id: customers.id })
     .from(customers)
     .where(where ?? sql`true`)
-    .orderBy(desc(customers.dbRegisteredAt), desc(customers.createdAt))
+    .orderBy(...orderBy)
     .limit(filter.perPage)
     .offset(offset);
 

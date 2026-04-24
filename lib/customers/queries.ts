@@ -82,7 +82,10 @@ function parseYear(v: unknown): number | undefined {
   return Math.floor(n);
 }
 
-function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[] {
+// get-detail.ts 의 prev/next 계산이 목록의 정렬과 100% 동일하도록 export.
+// 하드코딩된 orderBy 와 목록의 사용자 정렬이 어긋나면 팝업 이전/다음이 엉뚱한 고객을 가리키거나
+// 리스트에서 찾지 못해(idx = -1) 둘 다 비활성화되는 회귀를 방지.
+export function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined): SQL[] {
   // 기본: DB 등록일 → createdAt 내림차순
   if (!sort) {
     return [desc(customers.dbRegisteredAt), desc(customers.createdAt)];
