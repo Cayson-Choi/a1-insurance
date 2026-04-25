@@ -12,6 +12,10 @@ export type CustomerDetail = Customer & {
 export type DetailContext = {
   prevId: string | null;
   nextId: string | null;
+  // 이전/다음 고객이 위치한 페이지 번호 — 페이지 경계를 넘어갈 때 URL 의 ?page 갱신용.
+  // 같은 페이지면 filter.page 와 동일.
+  prevPage: number;
+  nextPage: number;
   indexInPage: number;
   totalInPage: number;
   filter: CustomerFilter;
@@ -95,9 +99,54 @@ export async function getDetailContext(
 
   const idx = pageRows.findIndex((r) => r.id === id);
 
+  // 기본: 같은 페이지 안에서 prev/next 결정
+  let prevId: string | null = idx > 0 ? pageRows[idx - 1].id : null;
+  let nextId: string | null =
+    idx >= 0 && idx < pageRows.length - 1 ? pageRows[idx + 1].id : null;
+  let prevPage = filter.page;
+  let nextPage = filter.page;
+
+  // 페이지 경계 처리: 첫 고객(idx === 0)이면서 1페이지 이상 → 직전 페이지의 마지막 고객을 prev 로
+  if (idx === 0 && filter.page > 1) {
+    const prevPageOffset = (filter.page - 1) * filter.perPage - 1;
+    const prevRow = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(where ?? sql`true`)
+      .orderBy(...orderBy)
+      .limit(1)
+      .offset(prevPageOffset);
+    if (prevRow[0]) {
+      prevId = prevRow[0].id;
+      prevPage = filter.page - 1;
+    }
+  }
+
+  // 페이지 경계 처리: 마지막 고객이면서 페이지가 꽉 참(perPage 만큼 채워짐) → 다음 페이지 첫 고객을 next 로
+  if (
+    idx >= 0 &&
+    idx === pageRows.length - 1 &&
+    pageRows.length === filter.perPage
+  ) {
+    const nextPageOffset = filter.page * filter.perPage;
+    const nextRow = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(where ?? sql`true`)
+      .orderBy(...orderBy)
+      .limit(1)
+      .offset(nextPageOffset);
+    if (nextRow[0]) {
+      nextId = nextRow[0].id;
+      nextPage = filter.page + 1;
+    }
+  }
+
   return {
-    prevId: idx > 0 ? pageRows[idx - 1].id : null,
-    nextId: idx >= 0 && idx < pageRows.length - 1 ? pageRows[idx + 1].id : null,
+    prevId,
+    nextId,
+    prevPage,
+    nextPage,
     indexInPage: idx,
     totalInPage: pageRows.length,
     filter,

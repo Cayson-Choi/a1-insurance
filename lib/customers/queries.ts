@@ -27,8 +27,14 @@ export type CustomerFilter = {
   perPage: number;
 };
 
-export const DEFAULT_PER_PAGE = 20;
-export const MAX_PER_PAGE = 100;
+// 페이지네이션 상수는 lib/customers/page-config 에서 단일 출처로 관리 (client-safe).
+// 기존 import 경로 호환을 위해 re-export.
+export {
+  DEFAULT_PER_PAGE,
+  MAX_PER_PAGE,
+  PER_PAGE_OPTIONS,
+} from "@/lib/customers/page-config";
+import { DEFAULT_PER_PAGE, MAX_PER_PAGE } from "@/lib/customers/page-config";
 
 function parseCallResult(v: unknown): CallResult | undefined {
   if (typeof v !== "string") return undefined;

@@ -94,6 +94,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
           page={list.page}
           totalPages={list.totalPages}
           total={list.total}
+          perPage={list.perPage}
         />
       </Suspense>
     </div>

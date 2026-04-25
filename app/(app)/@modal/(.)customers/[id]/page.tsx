@@ -53,6 +53,8 @@ export default async function CustomerDetailModal({ params, searchParams }: Page
       canDownloadImage={user.canDownloadImage}
       prevId={context.prevId}
       nextId={context.nextId}
+      prevPage={context.prevPage}
+      nextPage={context.nextPage}
       preservedParams={preservedParams}
       closeHref={closeHref}
       currentUserName={user.name ?? user.agentId}

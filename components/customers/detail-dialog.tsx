@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { toast } from "sonner";
 import { DetailForm } from "@/components/customers/detail-form";
-import { fetchCustomerAction } from "@/lib/customers/actions";
-import type { CustomerDetail } from "@/lib/customers/get-detail";
+import type { CustomerDetail, DetailContext } from "@/lib/customers/get-detail";
 
 type Agent = { agentId: string; name: string };
 
@@ -19,6 +18,8 @@ type Props = {
   canDownloadImage: boolean;
   prevId: string | null;
   nextId: string | null;
+  prevPage: number;
+  nextPage: number;
   preservedParams: Record<string, string>;
   closeHref: string;
   currentUserName: string;
@@ -33,6 +34,8 @@ export function DetailDialog({
   canDownloadImage,
   prevId: initialPrevId,
   nextId: initialNextId,
+  prevPage: initialPrevPage,
+  nextPage: initialNextPage,
   preservedParams,
   closeHref,
   currentUserName,
@@ -41,10 +44,28 @@ export function DetailDialog({
   const [customer, setCustomer] = useState<CustomerDetail>(initialCustomer);
   const [prevId, setPrevId] = useState<string | null>(initialPrevId);
   const [nextId, setNextId] = useState<string | null>(initialNextId);
+  const [prevPage, setPrevPage] = useState<number>(initialPrevPage);
+  const [nextPage, setNextPage] = useState<number>(initialNextPage);
   const [busy, setBusy] = useState(false);
 
-  const queryString = new URLSearchParams(preservedParams).toString();
-  const qs = queryString ? `?${queryString}` : "";
+  // 모달 진입 시점의 page 를 추적 — 페이지 경계 넘어갈 때 router.replace 트리거 판정용.
+  const initialCurrentPage = (() => {
+    const v = Number(preservedParams.page);
+    return Number.isFinite(v) && v >= 1 ? v : 1;
+  })();
+  const currentPageRef = useRef<number>(initialCurrentPage);
+  // 모달 진입 시점의 모든 search params (sort, dir 등) 를 freeze.
+  // 모달 안에서 일어나는 server action 응답이 preservedParams prop 을 바꿔도 영향 안 받게 ref 로 보존.
+  const initialParamsRef = useRef<Record<string, string>>({ ...preservedParams });
+
+  // preservedParams 에 새 page 를 끼워 넣어 검색 파라미터 객체 생성.
+  // prev/next href 빌드용 + fetchCustomerAction 호출 시 사용.
+  function paramsWithPage(page: number): Record<string, string> {
+    const out = { ...preservedParams };
+    if (page <= 1) delete out.page;
+    else out.page = String(page);
+    return out;
+  }
 
   // 데스크톱(md+)에서만 드래그 이동 — 모바일은 풀스크린이라 의미 없음
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -116,40 +137,70 @@ export function DetailDialog({
   }, [isDesktop]);
 
   const close = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
+    // 항상 모달 진입 시점의 params (sort, dir 등) 를 보존 + 사용자가 마지막으로 본 page 적용.
+    // initialParamsRef 로 freeze 해서 모달 내부 서버 액션이 preservedParams prop 을 바꿔도 영향 없음.
+    const currentPage = currentPageRef.current;
+    const params = new URLSearchParams(initialParamsRef.current);
+    if (currentPage <= 1) params.delete("page");
+    else params.set("page", String(currentPage));
+    const qs = params.toString();
+    const targetUrl = `/customers${qs ? `?${qs}` : ""}`;
+    // window.location.assign 으로 강제 full navigation — router.push 가 parallel route 의
+    // intercepting modal 이 활성인 상태에서 confused 해서 닫지 못하는 경우 회피.
+    if (typeof window !== "undefined") {
+      window.location.assign(targetUrl);
     } else {
-      router.push(closeHref);
+      router.push(targetUrl);
     }
-  }, [router, closeHref]);
+  }, [router]);
 
   const go = useCallback(
-    async (targetId: string | null) => {
+    async (targetId: string | null, targetPage: number) => {
       if (!targetId || busy) return;
       setBusy(true);
       try {
-        const res = await fetchCustomerAction(targetId, preservedParams);
-        if (!res.ok) {
-          toast.error(res.error);
+        const nextParams = { ...preservedParams };
+        if (targetPage <= 1) delete nextParams.page;
+        else nextParams.page = String(targetPage);
+        const qs = new URLSearchParams(nextParams).toString();
+        // 일반 GET API 호출 — server action auto-revalidate 부작용 회피.
+        const r = await fetch(`/api/customers/${targetId}/context${qs ? `?${qs}` : ""}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!r.ok) {
+          toast.error(r.status === 404 ? "고객을 찾을 수 없습니다." : "조회 실패");
           return;
         }
-        setCustomer(res.customer);
-        setPrevId(res.context.prevId);
-        setNextId(res.context.nextId);
-        // 브라우저 주소창만 조용히 갱신 — Next.js 라우터는 건드리지 않아
-        // Dialog/Popup 이 절대 리렌더되지 않음 (깜빡임 0)
-        if (typeof window !== "undefined") {
-          window.history.replaceState(
-            window.history.state,
-            "",
-            `/customers/${targetId}${qs}`,
-          );
+        const data = (await r.json()) as
+          | { ok: true; customer: CustomerDetail; context: DetailContext }
+          | { ok: false; error: string };
+        if (!data.ok) {
+          toast.error(data.error);
+          return;
         }
+        setCustomer(data.customer);
+        setPrevId(data.context.prevId);
+        setNextId(data.context.nextId);
+        setPrevPage(data.context.prevPage);
+        setNextPage(data.context.nextPage);
+
+        currentPageRef.current = targetPage;
+        // ── 최종안: 모달 깜빡임 0 우선 ─────────────────────────────
+        // Next.js parallel route + intercepting modal 구조에서는 modal 을 깜빡임 없이 유지하면서
+        // children slot(/customers list) 을 동시에 갱신하는 것이 안정적으로 불가능.
+        // 또한 window.history.replaceState 로 URL bar 만 갱신하면 Next.js 내부 URL 과 어긋나
+        // 닫기 시 router.push 가 navigation loop 에 빠짐.
+        // 따라서:
+        //   - 모달 안에서 이전/다음: state 로 콘텐츠만 전환. URL bar 는 진입 시점 그대로 유지.
+        //   - 사용자가 모달 닫을 때 close 함수에서 currentPage 로 navigate → list 가 그 시점에 갱신.
+        // 부수효과: URL bar 가 실제 보이는 고객 id 와 다름 (URL 공유 시 진입 시점 고객으로 열림).
+        // 다음 단계로 페이지가 정확히 갱신되는 것이 더 중요하므로 이 trade-off 수용.
       } finally {
         setBusy(false);
       }
     },
-    [preservedParams, qs, busy],
+    [preservedParams, busy],
   );
 
   function handleOpenChange(open: boolean) {
@@ -183,14 +234,22 @@ export function DetailDialog({
             canDelete={canDelete}
             canEditAgent={canEditAgent}
             canDownloadImage={canDownloadImage}
-            prevHref={prevId ? `/customers/${prevId}${qs}` : null}
-            nextHref={nextId ? `/customers/${nextId}${qs}` : null}
+            prevHref={
+              prevId
+                ? `/customers/${prevId}?${new URLSearchParams(paramsWithPage(prevPage)).toString()}`
+                : null
+            }
+            nextHref={
+              nextId
+                ? `/customers/${nextId}?${new URLSearchParams(paramsWithPage(nextPage)).toString()}`
+                : null
+            }
             closeHref={closeHref}
             currentUserName={currentUserName}
             variant="modal"
             onClose={close}
-            onPrev={() => go(prevId)}
-            onNext={() => go(nextId)}
+            onPrev={() => go(prevId, prevPage)}
+            onNext={() => go(nextId, nextPage)}
           />
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

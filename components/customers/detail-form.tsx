@@ -158,8 +158,19 @@ export function DetailForm({
     agentId: "담당자",
   };
 
+  // 사용자가 명시적으로 저장 버튼을 클릭하거나 Ctrl+S 했을 때만 true.
+  // 이 가드 없이는 React 19 + form 동작으로 setCustomer 시점에 의도치 않은 submit 이 발생해
+  // updateCustomerAction({}) 가 빈 데이터로 호출되며 revalidatePath('/customers') 가
+  // URL state 를 의도와 다르게 무효화하는 부작용이 있었음.
+  const userInitiatedSubmitRef = useRef(false);
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!userInitiatedSubmitRef.current) {
+      // 명시적 사용자 액션이 아니면 무시
+      return;
+    }
+    userInitiatedSubmitRef.current = false;
     const formData = new FormData(e.currentTarget);
     setFieldErrors({});
     startTransition(async () => {
@@ -316,6 +327,7 @@ export function DetailForm({
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
+        userInitiatedSubmitRef.current = true;
         formRef.current?.requestSubmit();
         return;
       }
@@ -421,7 +433,10 @@ export function DetailForm({
             type="button"
             size="sm"
             className="bg-brand text-brand-foreground hover:bg-brand-hover"
-            onClick={() => formRef.current?.requestSubmit()}
+            onClick={() => {
+              userInitiatedSubmitRef.current = true;
+              formRef.current?.requestSubmit();
+            }}
             disabled={pending}
             aria-label="저장"
           >

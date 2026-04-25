@@ -13,12 +13,6 @@ import {
   canReassignAgent,
 } from "@/lib/auth/rbac";
 import { UpdateCustomerSchema } from "@/lib/customers/schema";
-import {
-  getCustomerDetail,
-  getDetailContext,
-  type CustomerDetail,
-  type DetailContext,
-} from "@/lib/customers/get-detail";
 
 type UpdateResult =
   | { ok: true }
@@ -324,19 +318,5 @@ export async function bulkUpdateDbRegisteredAtAction(
   return { ok: true, updated: existing.length, newDate: normalized };
 }
 
-type FetchResult =
-  | { ok: true; customer: CustomerDetail; context: DetailContext }
-  | { ok: false; error: string };
-
-export async function fetchCustomerAction(
-  id: string,
-  searchParams: Record<string, string>,
-): Promise<FetchResult> {
-  const user = await requireUser();
-  const [customer, context] = await Promise.all([
-    getCustomerDetail(id, user),
-    getDetailContext(id, searchParams, user),
-  ]);
-  if (!customer) return { ok: false, error: "고객을 찾을 수 없습니다." };
-  return { ok: true, customer, context };
-}
+// fetchCustomerAction 제거 — server action 의 auto-revalidate 부작용으로 URL/cache 가 망가지는 문제가
+// 있어 일반 GET API (/api/customers/[id]/context) 로 전환됨.

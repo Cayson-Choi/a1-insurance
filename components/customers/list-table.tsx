@@ -199,7 +199,14 @@ export function ListTable({
       </div>
 
       <div className="border bg-card shadow-sm overflow-x-auto">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        {/* id 고정 — @dnd-kit 의 자동 생성 sequential ID 가 SSR/Client 간 다르게 매겨져 hydration mismatch 발생.
+            명시적 id 로 양쪽이 동일한 aria-describedby 값을 갖도록 강제. */}
+        <DndContext
+          id="customer-columns-dnd"
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
           <table className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
             <colgroup>
               {canBulkEdit ? <col style={{ width: 40 }} /> : null}

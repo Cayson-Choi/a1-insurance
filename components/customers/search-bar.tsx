@@ -40,10 +40,17 @@ export function SearchBar({
 
   const firstRenderRef = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // sp 를 commit useCallback deps 에 직접 넣으면 router.push → URL 변경 → sp 갱신 →
+  // commit 재생성 → useEffect 재발화 → router.push … 무한 루프. ref 로 분리.
+  // commit/reset 은 event handler 와 effect 에서만 호출되므로 mutate 는 effect 에서.
+  const spRef = useRef(sp);
+  useEffect(() => {
+    spRef.current = sp;
+  }, [sp]);
 
   const commit = useCallback(
     (immediate: boolean) => {
-      const next = new URLSearchParams();
+      const sp = spRef.current;
       const nm = name.trim();
       const ad = addr.trim();
       const ph = phone.replace(/\D/g, "");
@@ -51,15 +58,39 @@ export function SearchBar({
       const rb = rrnBack.replace(/\D/g, "").slice(0, 7);
       const yf = byFrom.replace(/\D/g, "").slice(0, 4);
       const yt = byTo.replace(/\D/g, "").slice(0, 4);
-      if (nm) next.set("name", nm);
-      if (ad) next.set("addr", ad);
-      if (ph) next.set("phone", ph);
-      if (callResult) next.set("callResult", callResult);
-      if (agentId) next.set("agentId", agentId);
-      if (rf.length === 6) next.set("rrnFront", rf);
-      if (rb.length === 7) next.set("rrnBack", rb);
-      if (yf.length === 4) next.set("byFrom", yf);
-      if (yt.length === 4) next.set("byTo", yt);
+
+      // 실제 검색 변경이 없으면 no-op — Strict Mode dev 의 effect 더블 인보크 등으로
+      // commit 이 spurious 하게 호출돼도 page 를 흔들지 않도록.
+      const eq = (a: string, b: string | null) => a === (b ?? "");
+      const noChange =
+        eq(nm, sp?.get("name") ?? null) &&
+        eq(ad, sp?.get("addr") ?? null) &&
+        eq(ph, sp?.get("phone") ?? null) &&
+        eq(callResult, sp?.get("callResult") ?? null) &&
+        eq(agentId, sp?.get("agentId") ?? null) &&
+        eq(rf.length === 6 ? rf : "", sp?.get("rrnFront") ?? null) &&
+        eq(rb.length === 7 ? rb : "", sp?.get("rrnBack") ?? null) &&
+        eq(yf.length === 4 ? yf : "", sp?.get("byFrom") ?? null) &&
+        eq(yt.length === 4 ? yt : "", sp?.get("byTo") ?? null);
+      if (noChange) return;
+
+      // 기존 URL params 를 base 로 — sort/dir/perPage 는 절대 건드리지 않는다.
+      const next = new URLSearchParams(sp ?? undefined);
+      const setOrDel = (key: string, val: string | undefined) => {
+        if (val) next.set(key, val);
+        else next.delete(key);
+      };
+      setOrDel("name", nm || undefined);
+      setOrDel("addr", ad || undefined);
+      setOrDel("phone", ph || undefined);
+      setOrDel("callResult", callResult || undefined);
+      setOrDel("agentId", agentId || undefined);
+      setOrDel("rrnFront", rf.length === 6 ? rf : undefined);
+      setOrDel("rrnBack", rb.length === 7 ? rb : undefined);
+      setOrDel("byFrom", yf.length === 4 ? yf : undefined);
+      setOrDel("byTo", yt.length === 4 ? yt : undefined);
+      // 검색 조건이 바뀌면 결과 셋이 달라지므로 page 는 1 로 리셋 (정렬 변경 시와 동일 관행).
+      next.delete("page");
       const qs = next.toString();
 
       const run = () => {
@@ -104,8 +135,25 @@ export function SearchBar({
     setByFrom("");
     setByTo("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // 검색 필드만 제거하고 정렬·perPage 는 보존.
+    const next = new URLSearchParams(spRef.current ?? undefined);
+    for (const k of [
+      "name",
+      "addr",
+      "phone",
+      "callResult",
+      "agentId",
+      "rrnFront",
+      "rrnBack",
+      "byFrom",
+      "byTo",
+      "page",
+    ]) {
+      next.delete(k);
+    }
+    const qs = next.toString();
     startTransition(() => {
-      router.push("/customers");
+      router.push(`/customers${qs ? `?${qs}` : ""}`);
     });
   }
 

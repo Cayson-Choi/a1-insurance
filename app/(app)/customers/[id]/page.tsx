@@ -35,8 +35,17 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
 
   const qs = preserveQuery(sp);
   const closeHref = `/customers${qs}`;
-  const prevHref = context.prevId ? `/customers/${context.prevId}${qs}` : null;
-  const nextHref = context.nextId ? `/customers/${context.nextId}${qs}` : null;
+
+  // 이전/다음이 다른 페이지에 있으면 URL 의 ?page 도 같이 바꿔서 전달.
+  function buildHref(targetId: string, targetPage: number): string {
+    const params = new URLSearchParams(qs.replace(/^\?/, ""));
+    if (targetPage <= 1) params.delete("page");
+    else params.set("page", String(targetPage));
+    const s = params.toString();
+    return `/customers/${targetId}${s ? `?${s}` : ""}`;
+  }
+  const prevHref = context.prevId ? buildHref(context.prevId, context.prevPage) : null;
+  const nextHref = context.nextId ? buildHref(context.nextId, context.nextPage) : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl rounded-xl border bg-card shadow-sm overflow-hidden">
