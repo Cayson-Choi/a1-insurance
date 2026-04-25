@@ -259,8 +259,8 @@ export function ListTable({
                   <tr
                     key={c.id}
                     className={cn(
-                      "border-b last:border-0 hover:bg-brand-muted/40",
-                      isSelected && "bg-brand-muted/60",
+                      "border-b last:border-0 hover:bg-brand/25",
+                      isSelected && "bg-brand/40 hover:bg-brand/50",
                     )}
                   >
                     {canBulkEdit ? (
