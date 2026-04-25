@@ -46,6 +46,22 @@ export async function POST(req: NextRequest) {
   if (file.size > 10 * 1024 * 1024) {
     return NextResponse.json({ error: "10MB 이하 파일만 업로드 가능합니다." }, { status: 400 });
   }
+  // MIME + 확장자 화이트리스트 — 잘못된 파일을 ExcelJS 가 읽으려다 메모리 폭발하는 것 사전 차단.
+  // 일부 브라우저는 application/octet-stream 을 보내기도 해서 확장자 폴백.
+  const ALLOWED_MIMES = new Set([
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/octet-stream",
+    "",
+  ]);
+  const lowerName = file.name.toLowerCase();
+  const hasXlsxExt = lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
+  if (!ALLOWED_MIMES.has(file.type) || !hasXlsxExt) {
+    return NextResponse.json(
+      { error: "엑셀 파일(.xlsx 또는 .xls)만 업로드 가능합니다." },
+      { status: 400 },
+    );
+  }
 
   const buf = await file.arrayBuffer();
   const parsed = await parseCustomersWorkbook(buf);

@@ -22,7 +22,6 @@ export function Logo({
           width={300}
           height={150}
           priority={priority}
-          unoptimized
           className="h-32 w-auto"
         />
       </div>
@@ -37,7 +36,6 @@ export function Logo({
         width={200}
         height={100}
         priority={priority}
-        unoptimized
         className={cn(
           "w-auto",
           variant === "mark" ? "h-7" : "h-8",

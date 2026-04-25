@@ -302,13 +302,16 @@ export function DetailForm({
     }
   }
 
-  // handler refs — 재마운트/재렌더 시에도 최신 함수가 바인딩되도록
+  // handler refs — 재마운트/재렌더 시에도 최신 함수가 바인딩되도록.
+  // 전역 keydown 핸들러가 마운트 시점의 함수를 capture 한 채로 stale 해지지 않게 하는 패턴.
   const closeRef = useRef(close);
   const goPrevRef = useRef(goPrev);
   const goNextRef = useRef(goNext);
-  closeRef.current = close;
-  goPrevRef.current = goPrev;
-  goNextRef.current = goNext;
+  useEffect(() => {
+    closeRef.current = close;
+    goPrevRef.current = goPrev;
+    goNextRef.current = goNext;
+  });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

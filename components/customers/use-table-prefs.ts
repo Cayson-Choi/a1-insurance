@@ -70,6 +70,10 @@ export function useTablePrefs() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    // localStorage 는 client-only — SSR 마크업과 mismatch 를 피하려면 mount 후 동기화해야 한다.
+    // useSyncExternalStore 로 옮길 수도 있으나 이 hook 의 다른 setter (setOrder/setWidth 등)
+    // 와 통일된 useState 패턴이 더 단순.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrderState(sanitizeOrder(readJSON(STORAGE_KEY_ORDER)));
     setWidthsState(sanitizeWidths(readJSON(STORAGE_KEY_WIDTHS)));
     setHydrated(true);

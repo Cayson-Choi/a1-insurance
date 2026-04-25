@@ -168,6 +168,8 @@
 
 **주민번호 처리**: `주민No` 컬럼은 `YYMMDD-NXXXXXX` 형식 평문 그대로 저장됩니다.
 
+**파일 검증**: 업로드 전 단계에서 (1) 10MB 크기 제한, (2) MIME 타입(`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 등) 또는 `application/octet-stream` + `.xlsx`/`.xls` 확장자 화이트리스트로 비-엑셀 파일을 차단합니다. 잘못된 파일이 ExcelJS 파서에 도달해 메모리를 폭발시키는 것을 방지.
+
 ### 다운로드 — `canExport` 보유 사용자
 
 - **전체 다운로드**: `엑셀 업/다운로드` → **전체 다운로드**
@@ -380,6 +382,9 @@
 | 강제 로그아웃 | `users.sessions_invalidated_at` 기반. JWT iat 비교로 세션 폐기. |
 | 외부 알림 | Slack / Telegram 병행. 실패해도 로그인 자체는 정상 진행 (fire-and-forget). |
 | 검색엔진 색인 | `robots: noindex` 메타 태그로 차단 (사내 시스템) |
+| HTTP 보안 헤더 | `X-Content-Type-Options: nosniff` · `X-Frame-Options: DENY` (clickjacking 차단) · `Referrer-Policy: strict-origin-when-cross-origin` · `Permissions-Policy` 로 카메라/마이크/위치 차단. `next.config.ts` 의 `headers()` 에서 일괄 적용. |
+| 엑셀 업로드 검증 | 10MB 크기 제한 + MIME 화이트리스트(`*.xlsx` / `*.xls` MIME 또는 `application/octet-stream` + 확장자) 로 비-엑셀 파일이 ExcelJS 에 도달하기 전 차단. |
+| 프로덕션 로그 | `console.log/info/debug` 자동 제거 (`compiler.removeConsole`). `console.error/warn` 은 보존하여 운영 디버깅 가능. |
 
 ### 키 관리 주의사항
 

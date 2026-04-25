@@ -23,7 +23,8 @@
 - **매니저**: 담당자 권한 + 전체 고객 조회 + 담당자 재할당(개별·일괄). 관리자 전용 페이지는 접근 불가
 - **모바일**: 햄버거 메뉴, 테이블 가로 스크롤, 팝업 풀스크린, 검색바 2열 그리드
 - **브랜드**: DB-CRM 청록 `#0891b2`, 딥블루 `#1e3a8a`, Pretendard 폰트, OG 이미지(카톡·링크 프리뷰)
-- **성능**: Vercel Function 리전을 Neon DB 와 동일(`sin1` Singapore)로 배치해 DB 왕복 지연 최소화 + React.cache 로 요청당 인증·권한 조회 중복 제거
+- **성능**: Vercel Function 리전을 Neon DB 와 동일(`sin1` Singapore)로 배치해 DB 왕복 지연 최소화 + React.cache 로 요청당 인증·권한 조회 중복 제거 + 프로덕션 빌드에서 `console.log` 자동 제거 (`console.error`/`warn` 은 보존)
+- **보안 헤더**: `X-Content-Type-Options: nosniff` · `X-Frame-Options: DENY` · `Referrer-Policy: strict-origin-when-cross-origin` · `Permissions-Policy` 로 카메라/마이크/위치 차단. 엑셀 업로드는 MIME + 확장자 화이트리스트 검증으로 비-엑셀 파일 차단
 
 ---
 

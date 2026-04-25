@@ -162,7 +162,9 @@ export function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined
   return [direction(target), desc(customers.createdAt)];
 }
 
-function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
+// get-detail.ts 의 prev/next 컨텍스트 계산이 list 와 동일한 WHERE 를 쓰도록 export.
+// 두 곳에 같은 로직을 두면 검색 필터 추가/변경 시 한 쪽만 수정해서 결과 불일치가 발생함.
+export function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
   const conds: SQL[] = [];
 
   // admin·manager 는 전체 조회 가능 (선택된 agent 필터만 적용).

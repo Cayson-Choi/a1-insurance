@@ -10,7 +10,9 @@ const ACTIVITY_EVENTS = ["mousemove", "keydown", "click", "scroll", "touchstart"
 
 export function IdleTimeout() {
   const [warningVisible, setWarningVisible] = useState(false);
-  const lastActivityRef = useRef<number>(Date.now());
+  // 0 으로 초기화 — 실제 값은 mount 직후 useEffect 의 scheduleTimers/resetIdle 에서 세팅.
+  // 초기값으로 Date.now() 를 호출하면 render 중 impure call 위반.
+  const lastActivityRef = useRef<number>(0);
   const warnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, startTransition] = useTransition();

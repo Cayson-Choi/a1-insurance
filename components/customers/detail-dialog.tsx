@@ -70,7 +70,9 @@ export function DetailDialog({
   // 데스크톱(md+)에서만 드래그 이동 — 모바일은 풀스크린이라 의미 없음
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const offsetRef = useRef(offset);
-  offsetRef.current = offset;
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
@@ -83,6 +85,8 @@ export function DetailDialog({
 
   useEffect(() => {
     if (!isDesktop) {
+      // 데스크톱에서 모바일 폭으로 전환되면 드래그 오프셋 리셋 — 의도된 외부 동기화.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOffset({ x: 0, y: 0 });
       return;
     }

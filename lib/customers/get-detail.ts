@@ -1,9 +1,13 @@
-import { and, eq, ilike, SQL, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users, type Customer } from "@/lib/db/schema";
-import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
-import { parseFilter, buildOrderBy, type CustomerFilter } from "@/lib/customers/queries";
+import {
+  parseFilter,
+  buildOrderBy,
+  buildWhere,
+  type CustomerFilter,
+} from "@/lib/customers/queries";
 
 export type CustomerDetail = Customer & {
   agentName: string | null;
@@ -20,36 +24,6 @@ export type DetailContext = {
   totalInPage: number;
   filter: CustomerFilter;
 };
-
-function parseCallResult(v: unknown): CallResult | undefined {
-  if (typeof v !== "string") return undefined;
-  return (CALL_RESULTS as readonly string[]).includes(v) ? (v as CallResult) : undefined;
-}
-
-function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | undefined {
-  const conds: SQL[] = [];
-  // admin·manager 는 전체 조회, agent 는 본인 것만.
-  if (!canSeeAllCustomers(user)) {
-    conds.push(eq(customers.agentId, user.agentId));
-  } else if (filter.agentId) {
-    conds.push(eq(customers.agentId, filter.agentId));
-  }
-  if (filter.name) conds.push(ilike(customers.name, `%${filter.name}%`));
-  if (filter.address) conds.push(ilike(customers.address, `%${filter.address}%`));
-  if (filter.phone) {
-    conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
-  }
-  if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
-  if (filter.rrnFront) conds.push(eq(customers.rrnFront, filter.rrnFront));
-  if (filter.rrnBack) conds.push(eq(customers.rrnBack, filter.rrnBack));
-  if (filter.birthYearFrom !== undefined) {
-    conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
-  }
-  if (filter.birthYearTo !== undefined) {
-    conds.push(sql`extract(year from ${customers.birthDate}) <= ${filter.birthYearTo}`);
-  }
-  return conds.length ? and(...conds) : undefined;
-}
 
 export async function getCustomerDetail(
   id: string,
@@ -152,5 +126,3 @@ export async function getDetailContext(
     filter,
   };
 }
-
-export { parseCallResult };
