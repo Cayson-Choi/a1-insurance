@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
   if (file.size > 10 * 1024 * 1024) {
     return NextResponse.json({ error: "10MB 이하 파일만 업로드 가능합니다." }, { status: 400 });
   }
-  // MIME + 확장자 화이트리스트 — 잘못된 파일을 ExcelJS 가 읽으려다 메모리 폭발하는 것 사전 차단.
-  // 일부 브라우저는 application/octet-stream 을 보내기도 해서 확장자 폴백.
+  // 확장자 우선 검증 + MIME 보조 검증.
+  // 일부 브라우저는 빈 문자열이나 application/octet-stream 을 보내므로 MIME 만으로는 막을 수 없고,
+  // 그렇다고 octet-stream 을 화이트리스트에 넣으면 임의 파일이 통과되므로 확장자(.xlsx/.xls) 만으로 차단한다.
   const ALLOWED_MIMES = new Set([
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   ]);
   const lowerName = file.name.toLowerCase();
   const hasXlsxExt = lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
-  if (!ALLOWED_MIMES.has(file.type) || !hasXlsxExt) {
+  if (!hasXlsxExt || !ALLOWED_MIMES.has(file.type)) {
     return NextResponse.json(
       { error: "엑셀 파일(.xlsx 또는 .xls)만 업로드 가능합니다." },
       { status: 400 },
@@ -330,12 +331,16 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (e) {
+    // 클라이언트에는 generic 메시지만 노출 — DB 스키마/내부 경로 leak 방지.
+    // 운영 디버깅은 서버 로그에서.
     console.error("[import] upsert transaction failed:", e);
-    const msg =
-      e instanceof Error
-        ? e.message
-        : "업로드 중 오류가 발생했습니다. 엑셀을 확인하고 다시 시도하세요.";
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "업로드 중 오류가 발생했습니다. 엑셀 형식을 확인하고 다시 시도하세요.",
+      },
+      { status: 500 },
+    );
   }
 
   // 엑셀에 매칭 안 된 기존 고객 = 그대로 유지됨

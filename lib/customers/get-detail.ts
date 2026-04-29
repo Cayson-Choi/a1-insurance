@@ -80,37 +80,42 @@ export async function getDetailContext(
   let prevPage = filter.page;
   let nextPage = filter.page;
 
-  // 페이지 경계 처리: 첫 고객(idx === 0)이면서 1페이지 이상 → 직전 페이지의 마지막 고객을 prev 로
-  if (idx === 0 && filter.page > 1) {
-    const prevPageOffset = (filter.page - 1) * filter.perPage - 1;
-    const prevRow = await db
-      .select({ id: customers.id })
-      .from(customers)
-      .where(where ?? sql`true`)
-      .orderBy(...orderBy)
-      .limit(1)
-      .offset(prevPageOffset);
-    if (prevRow[0]) {
+  // 페이지 경계 처리:
+  //   - 첫 고객(idx===0)이면서 1페이지 이상 → 직전 페이지의 마지막 고객을 prev
+  //   - 마지막 고객이면서 페이지가 꽉 참 → 다음 페이지 첫 고객을 next
+  // 두 쿼리는 서로 독립이므로 Promise.all 로 병렬 실행 — 직렬 await 비용 제거.
+  const needPrevQuery = idx === 0 && filter.page > 1;
+  const needNextQuery =
+    idx >= 0 &&
+    idx === pageRows.length - 1 &&
+    pageRows.length === filter.perPage;
+
+  if (needPrevQuery || needNextQuery) {
+    const prevPromise = needPrevQuery
+      ? db
+          .select({ id: customers.id })
+          .from(customers)
+          .where(where ?? sql`true`)
+          .orderBy(...orderBy)
+          .limit(1)
+          .offset((filter.page - 1) * filter.perPage - 1)
+      : Promise.resolve([] as Array<{ id: string }>);
+    const nextPromise = needNextQuery
+      ? db
+          .select({ id: customers.id })
+          .from(customers)
+          .where(where ?? sql`true`)
+          .orderBy(...orderBy)
+          .limit(1)
+          .offset(filter.page * filter.perPage)
+      : Promise.resolve([] as Array<{ id: string }>);
+
+    const [prevRow, nextRow] = await Promise.all([prevPromise, nextPromise]);
+    if (needPrevQuery && prevRow[0]) {
       prevId = prevRow[0].id;
       prevPage = filter.page - 1;
     }
-  }
-
-  // 페이지 경계 처리: 마지막 고객이면서 페이지가 꽉 참(perPage 만큼 채워짐) → 다음 페이지 첫 고객을 next 로
-  if (
-    idx >= 0 &&
-    idx === pageRows.length - 1 &&
-    pageRows.length === filter.perPage
-  ) {
-    const nextPageOffset = filter.page * filter.perPage;
-    const nextRow = await db
-      .select({ id: customers.id })
-      .from(customers)
-      .where(where ?? sql`true`)
-      .orderBy(...orderBy)
-      .limit(1)
-      .offset(nextPageOffset);
-    if (nextRow[0]) {
+    if (needNextQuery && nextRow[0]) {
       nextId = nextRow[0].id;
       nextPage = filter.page + 1;
     }

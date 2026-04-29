@@ -58,6 +58,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased">
+      <head>
+        {/* Pretendard variable font — CDN 직링크. preconnect 로 TLS 핸드셰이크 선행. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {/* 전역: Ctrl+S/Cmd+S 의 "페이지 저장" 브라우저 기본 동작 차단.
             팝업 상세 폼의 내부 단축키 핸들러는 그대로 동작(전파 막지 않음). */}

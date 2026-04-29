@@ -67,12 +67,11 @@ export function DetailDialog({
     return out;
   }
 
-  // 데스크톱(md+)에서만 드래그 이동 — 모바일은 풀스크린이라 의미 없음
+  // 데스크톱(md+)에서만 드래그 이동 — 모바일은 풀스크린이라 의미 없음.
+  // ref 는 render 중 동기 할당 — effect 는 한 프레임 지연돼 드래그 시 점프 발생 가능.
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const offsetRef = useRef(offset);
-  useEffect(() => {
-    offsetRef.current = offset;
-  }, [offset]);
+  offsetRef.current = offset;
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {

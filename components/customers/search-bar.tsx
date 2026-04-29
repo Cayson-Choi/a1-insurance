@@ -42,11 +42,9 @@ export function SearchBar({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // sp 를 commit useCallback deps 에 직접 넣으면 router.push → URL 변경 → sp 갱신 →
   // commit 재생성 → useEffect 재발화 → router.push … 무한 루프. ref 로 분리.
-  // commit/reset 은 event handler 와 effect 에서만 호출되므로 mutate 는 effect 에서.
+  // ref 는 매 render 시 동기 할당 — useEffect 사용하면 한 프레임 늦어 spurious commit 가능.
   const spRef = useRef(sp);
-  useEffect(() => {
-    spRef.current = sp;
-  }, [sp]);
+  spRef.current = sp;
 
   const commit = useCallback(
     (immediate: boolean) => {

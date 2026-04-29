@@ -83,33 +83,36 @@ export async function listAuditLogs(filter: AuditFilter): Promise<AuditListResul
     conds.push(lte(auditLogs.createdAt, new Date(`${filter.toDate}T23:59:59.999`)));
   }
   const where = conds.length ? and(...conds) : undefined;
-
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(auditLogs)
-    .where(where ?? sql`true`);
-
   const offset = (filter.page - 1) * filter.perPage;
 
-  const rows = await db
-    .select({
-      id: auditLogs.id,
-      actorAgentId: auditLogs.actorAgentId,
-      actorName: users.name,
-      customerId: auditLogs.customerId,
-      customerName: customers.name,
-      action: auditLogs.action,
-      before: auditLogs.before,
-      after: auditLogs.after,
-      createdAt: auditLogs.createdAt,
-    })
-    .from(auditLogs)
-    .leftJoin(users, eq(auditLogs.actorAgentId, users.agentId))
-    .leftJoin(customers, eq(auditLogs.customerId, customers.id))
-    .where(where ?? sql`true`)
-    .orderBy(desc(auditLogs.createdAt))
-    .limit(filter.perPage)
-    .offset(offset);
+  // count 와 list 병렬 실행.
+  const [countResult, rows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(auditLogs)
+      .where(where ?? sql`true`),
+    db
+      .select({
+        id: auditLogs.id,
+        actorAgentId: auditLogs.actorAgentId,
+        actorName: users.name,
+        customerId: auditLogs.customerId,
+        customerName: customers.name,
+        action: auditLogs.action,
+        before: auditLogs.before,
+        after: auditLogs.after,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.actorAgentId, users.agentId))
+      .leftJoin(customers, eq(auditLogs.customerId, customers.id))
+      .where(where ?? sql`true`)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(filter.perPage)
+      .offset(offset),
+  ]);
+
+  const count = countResult[0].count;
 
   return {
     rows: rows as AuditRow[],

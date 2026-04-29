@@ -114,8 +114,6 @@ export async function updateCustomerAction(
     patch.agentId = data.agentId;
   }
 
-  await db.update(customers).set(patch).where(eq(customers.id, id));
-
   // 감사로그 스냅샷: 편집 가능한 모든 필드를 포함하여 변경 이력이 완전하게 남도록 함.
   // `patch` 에 없는 키는 기존 값을 그대로 보존(변화 없음 = diff 결과에서 자연히 제외됨).
   const beforeSnapshot = {
@@ -169,12 +167,17 @@ export async function updateCustomerAction(
     rrnBack: patch.rrnBack ?? existing.rrnBack,
   };
 
-  await db.insert(auditLogs).values({
-    actorAgentId: user.agentId,
-    customerId: id,
-    action: agentChange ? "agent_change" : "edit",
-    before: beforeSnapshot,
-    after: afterSnapshot,
+  // UPDATE 와 audit INSERT 를 한 트랜잭션으로 묶어 원자성 보장.
+  // 도중 실패 시 둘 다 롤백되어 데이터/감사로그 불일치 차단.
+  await db.transaction(async (tx) => {
+    await tx.update(customers).set(patch).where(eq(customers.id, id));
+    await tx.insert(auditLogs).values({
+      actorAgentId: user.agentId,
+      customerId: id,
+      action: agentChange ? "agent_change" : "edit",
+      before: beforeSnapshot,
+      after: afterSnapshot,
+    });
   });
 
   revalidatePath("/customers");
@@ -201,21 +204,23 @@ export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
     return { ok: false, error: "해당 고객에 대한 권한이 없습니다." };
   }
 
-  // 감사로그 먼저 기록 (삭제 후 customer_id 참조 가능하도록 CASCADE 없이 남겨둠)
-  await db.insert(auditLogs).values({
-    actorAgentId: user.agentId,
-    customerId: id,
-    action: "edit",
-    before: {
-      deleted: false,
-      name: existing.name,
-      phone1: existing.phone1,
-      agentId: existing.agentId,
-    },
-    after: { deleted: true },
+  // 감사로그 + 삭제를 한 트랜잭션으로 — 삭제 후 customer_id 참조를 위해 audit 가 먼저 기록되어야 하고,
+  // 둘 중 하나만 실패하면 일관성이 깨지므로 트랜잭션으로 묶음.
+  await db.transaction(async (tx) => {
+    await tx.insert(auditLogs).values({
+      actorAgentId: user.agentId,
+      customerId: id,
+      action: "edit",
+      before: {
+        deleted: false,
+        name: existing.name,
+        phone1: existing.phone1,
+        agentId: existing.agentId,
+      },
+      after: { deleted: true },
+    });
+    await tx.delete(customers).where(eq(customers.id, id));
   });
-
-  await db.delete(customers).where(eq(customers.id, id));
 
   revalidatePath("/customers");
   return { ok: true };
@@ -253,20 +258,23 @@ export async function bulkReassignAction(
     return { ok: false, error: "대상 고객을 찾을 수 없습니다." };
   }
 
-  await db
-    .update(customers)
-    .set({ agentId: newAgent, updatedAt: new Date() })
-    .where(inArray(customers.id, customerIds));
+  // 일괄 UPDATE 와 N개 audit INSERT 를 한 트랜잭션으로 — 일부 audit 가 누락되는 것을 방지.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(customers)
+      .set({ agentId: newAgent, updatedAt: new Date() })
+      .where(inArray(customers.id, customerIds));
 
-  await db.insert(auditLogs).values(
-    existing.map((c) => ({
-      actorAgentId: actor.agentId,
-      customerId: c.id,
-      action: "bulk_change" as const,
-      before: { agentId: c.agentId },
-      after: { agentId: newAgent },
-    })),
-  );
+    await tx.insert(auditLogs).values(
+      existing.map((c) => ({
+        actorAgentId: actor.agentId,
+        customerId: c.id,
+        action: "bulk_change" as const,
+        before: { agentId: c.agentId },
+        after: { agentId: newAgent },
+      })),
+    );
+  });
 
   revalidatePath("/customers");
   return { ok: true, updated: existing.length, newAgentId: newAgent };
@@ -299,20 +307,22 @@ export async function bulkUpdateDbRegisteredAtAction(
     return { ok: false, error: "대상 고객을 찾을 수 없습니다." };
   }
 
-  await db
-    .update(customers)
-    .set({ dbRegisteredAt: normalized, updatedAt: new Date() })
-    .where(inArray(customers.id, customerIds));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(customers)
+      .set({ dbRegisteredAt: normalized, updatedAt: new Date() })
+      .where(inArray(customers.id, customerIds));
 
-  await db.insert(auditLogs).values(
-    existing.map((c) => ({
-      actorAgentId: actor.agentId,
-      customerId: c.id,
-      action: "bulk_change" as const,
-      before: { dbRegisteredAt: c.dbRegisteredAt },
-      after: { dbRegisteredAt: normalized },
-    })),
-  );
+    await tx.insert(auditLogs).values(
+      existing.map((c) => ({
+        actorAgentId: actor.agentId,
+        customerId: c.id,
+        action: "bulk_change" as const,
+        before: { dbRegisteredAt: c.dbRegisteredAt },
+        after: { dbRegisteredAt: normalized },
+      })),
+    );
+  });
 
   revalidatePath("/customers");
   return { ok: true, updated: existing.length, newDate: normalized };

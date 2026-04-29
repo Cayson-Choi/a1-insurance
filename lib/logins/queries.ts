@@ -82,31 +82,33 @@ export async function listLoginEvents(filter: LoginFilter): Promise<{
   totalPages: number;
 }> {
   const where = buildWhere(filter);
-
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(loginEvents)
-    .where(where ?? sql`true`);
-
   const offset = (filter.page - 1) * filter.perPage;
 
-  const rows = await db
-    .select({
-      id: loginEvents.id,
-      agentId: loginEvents.agentId,
-      agentName: users.name,
-      success: loginEvents.success,
-      ip: loginEvents.ip,
-      userAgent: loginEvents.userAgent,
-      reason: loginEvents.reason,
-      createdAt: loginEvents.createdAt,
-    })
-    .from(loginEvents)
-    .leftJoin(users, eq(users.agentId, loginEvents.agentId))
-    .where(where ?? sql`true`)
-    .orderBy(desc(loginEvents.createdAt))
-    .limit(filter.perPage)
-    .offset(offset);
+  const [countResult, rows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(loginEvents)
+      .where(where ?? sql`true`),
+    db
+      .select({
+        id: loginEvents.id,
+        agentId: loginEvents.agentId,
+        agentName: users.name,
+        success: loginEvents.success,
+        ip: loginEvents.ip,
+        userAgent: loginEvents.userAgent,
+        reason: loginEvents.reason,
+        createdAt: loginEvents.createdAt,
+      })
+      .from(loginEvents)
+      .leftJoin(users, eq(users.agentId, loginEvents.agentId))
+      .where(where ?? sql`true`)
+      .orderBy(desc(loginEvents.createdAt))
+      .limit(filter.perPage)
+      .offset(offset),
+  ]);
+
+  const count = countResult[0].count;
 
   return {
     rows: rows as LoginEventRow[],

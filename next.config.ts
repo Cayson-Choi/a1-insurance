@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
-  // 보안 헤더 — clickjacking·MIME sniffing·referrer leakage 방어.
+  // 보안 헤더 — clickjacking·MIME sniffing·referrer leakage·downgrade attack 방어.
+  // HSTS: 한 번 https 로 들어온 클라이언트는 1년간 강제 https. preload 디렉티브 미포함 — 사전등록 절차 거치지 않은 도메인이 preload 리스트에 들어가는 것 방지.
+  // CSP 는 Next.js 의 nonce 기반 인라인 스크립트 처리(폰트, hydration) 와 충돌 가능성이 있어 보고 모드(Report-Only) 또는 별도 PR 로 도입 권장.
   async headers() {
     return [
       {
@@ -21,6 +23,11 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
         ],
       },
     ];

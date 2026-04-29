@@ -128,6 +128,8 @@ export const customers = pgTable(
     index("customers_rrn_back_idx").on(t.rrnBack),
     index("customers_db_registered_idx").on(t.dbRegisteredAt),
     index("customers_call_result_idx").on(t.callResult),
+    // buildOrderBy 가 모든 정렬 케이스에서 desc(createdAt) 을 tie-breaker 로 추가하므로 index 필요.
+    index("customers_created_at_idx").on(t.createdAt),
   ],
 );
 

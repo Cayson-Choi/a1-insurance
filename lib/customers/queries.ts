@@ -241,54 +241,57 @@ export async function listCustomers(
   user: SessionUser,
 ): Promise<ListResult> {
   const where = buildWhere(filter, user);
-
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(customers)
-    .where(where ?? sql`true`);
-
   const offset = (filter.page - 1) * filter.perPage;
   const orderBy = buildOrderBy(filter.sort, filter.dir);
 
-  const rows = await db
-    .select({
-      id: customers.id,
-      customerCode: customers.customerCode,
-      agentId: customers.agentId,
-      agentName: users.name,
-      name: customers.name,
-      birthDate: customers.birthDate,
-      rrnFront: customers.rrnFront,
-      rrnBack: customers.rrnBack,
-      phone1: customers.phone1,
-      job: customers.job,
-      address: customers.address,
-      addressDetail: customers.addressDetail,
-      callResult: customers.callResult,
-      dbProduct: customers.dbProduct,
-      dbPremium: customers.dbPremium,
-      dbHandler: customers.dbHandler,
-      subCategory: customers.subCategory,
-      dbPolicyNo: customers.dbPolicyNo,
-      dbRegisteredAt: customers.dbRegisteredAt,
-      mainCategory: customers.mainCategory,
-      dbStartAt: customers.dbStartAt,
-      branch: customers.branch,
-      hq: customers.hq,
-      team: customers.team,
-      fax: customers.fax,
-      reservationReceived: customers.reservationReceived,
-      dbCompany: customers.dbCompany,
-      dbEndAt: customers.dbEndAt,
-      createdAt: customers.createdAt,
-      updatedAt: customers.updatedAt,
-    })
-    .from(customers)
-    .leftJoin(users, eq(customers.agentId, users.agentId))
-    .where(where ?? sql`true`)
-    .orderBy(...orderBy)
-    .limit(filter.perPage)
-    .offset(offset);
+  // count 와 list 는 서로 독립적 — 병렬 실행으로 latency 절반.
+  const [countResult, rows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customers)
+      .where(where ?? sql`true`),
+    db
+      .select({
+        id: customers.id,
+        customerCode: customers.customerCode,
+        agentId: customers.agentId,
+        agentName: users.name,
+        name: customers.name,
+        birthDate: customers.birthDate,
+        rrnFront: customers.rrnFront,
+        rrnBack: customers.rrnBack,
+        phone1: customers.phone1,
+        job: customers.job,
+        address: customers.address,
+        addressDetail: customers.addressDetail,
+        callResult: customers.callResult,
+        dbProduct: customers.dbProduct,
+        dbPremium: customers.dbPremium,
+        dbHandler: customers.dbHandler,
+        subCategory: customers.subCategory,
+        dbPolicyNo: customers.dbPolicyNo,
+        dbRegisteredAt: customers.dbRegisteredAt,
+        mainCategory: customers.mainCategory,
+        dbStartAt: customers.dbStartAt,
+        branch: customers.branch,
+        hq: customers.hq,
+        team: customers.team,
+        fax: customers.fax,
+        reservationReceived: customers.reservationReceived,
+        dbCompany: customers.dbCompany,
+        dbEndAt: customers.dbEndAt,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+      })
+      .from(customers)
+      .leftJoin(users, eq(customers.agentId, users.agentId))
+      .where(where ?? sql`true`)
+      .orderBy(...orderBy)
+      .limit(filter.perPage)
+      .offset(offset),
+  ]);
+
+  const count = countResult[0].count;
 
   return {
     rows: rows as ListedCustomer[],
