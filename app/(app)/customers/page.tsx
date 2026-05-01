@@ -49,8 +49,10 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   ).toString();
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    // h-full + flex-col + min-h-0 — 페이지 높이를 viewport 에 고정해 page-level 스크롤 제거.
+    // ListTable 의 내부 스크롤 컨테이너가 sticky 헤더와 가로 스크롤바를 viewport 에 붙여 둔다.
+    <div className="h-full flex flex-col gap-5 min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">고객 목록</h1>
           <p className="text-sm text-muted-foreground">
@@ -77,6 +79,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         <SearchBar agents={agents} showAgentFilter={canSeeAll} />
       </Suspense>
 
+      {/* flex-1 min-h-0 — 남는 세로 공간을 모두 차지해 내부 스크롤이 동작하도록. */}
       <ListTable
         rows={list.rows}
         showAgentColumn={canSeeAll}
@@ -90,12 +93,14 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       />
 
       <Suspense>
-        <Pagination
-          page={list.page}
-          totalPages={list.totalPages}
-          total={list.total}
-          perPage={list.perPage}
-        />
+        <div className="shrink-0">
+          <Pagination
+            page={list.page}
+            totalPages={list.totalPages}
+            total={list.total}
+            perPage={list.perPage}
+          />
+        </div>
       </Suspense>
     </div>
   );

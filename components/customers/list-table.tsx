@@ -184,7 +184,11 @@ export function ListTable({
 
   return (
     <>
-      <div className="flex items-center justify-end gap-2 mb-2 text-xs text-muted-foreground">
+      {/* flex-1 min-h-0 chain — 부모(customers/page) 의 flex-col 안에서 남는 세로 공간을 차지해
+          내부 테이블 컨테이너가 viewport 안에서만 스크롤되도록. page-level 스크롤이 사라져
+          sticky 헤더가 항상 viewport 상단에 보인다. */}
+      <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex items-center justify-end gap-2 mb-2 text-xs text-muted-foreground shrink-0">
         <span className="hidden md:inline">컬럼 헤더 드래그·우측 가장자리로 폭 조절·헤더 클릭으로 정렬</span>
         <button
           type="button"
@@ -198,7 +202,10 @@ export function ListTable({
         </button>
       </div>
 
-      <div className="border bg-card shadow-sm overflow-x-auto">
+      {/* 내부 스크롤 컨테이너 — flex-1 min-h-0 로 부모의 남는 공간을 모두 차지.
+          가로 스크롤바가 항상 viewport 하단에 위치하고 컬럼 헤더가 컨테이너 상단에 sticky 로 고정된다.
+          한 페이지 행 수가 많아도(500) 헤더와 가로 스크롤이 멀어지지 않는다. */}
+      <div className="flex-1 min-h-0 border bg-card shadow-sm overflow-auto">
         {/* id 고정 — @dnd-kit 의 자동 생성 sequential ID 가 SSR/Client 간 다르게 매겨져 hydration mismatch 발생.
             명시적 id 로 양쪽이 동일한 aria-describedby 값을 갖도록 강제. */}
         <DndContext
@@ -214,10 +221,10 @@ export function ListTable({
                 <col key={id} style={{ width: widthOf(id) }} />
               ))}
             </colgroup>
-            <thead className="bg-muted/50">
+            <thead>
               <tr>
                 {canBulkEdit ? (
-                  <th className="h-10 px-3 text-left align-middle border-b border-r">
+                  <th className="h-10 px-3 text-left align-middle border-b border-r bg-muted sticky top-0 z-20">
                     <Checkbox
                       checked={allSelected}
                       indeterminate={someSelected}
@@ -281,6 +288,7 @@ export function ListTable({
             </tbody>
           </table>
         </DndContext>
+      </div>
       </div>
 
       {canBulkEdit && selected.size > 0 ? (
@@ -378,7 +386,11 @@ function SortableHeader({
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
-    position: "relative",
+    // 인라인 position 은 의도적으로 비움 — Tailwind 의 `sticky top-0` 클래스가 적용되어
+    // 컬럼 헤더가 스크롤 시 컨테이너 상단에 고정된다. 인라인 position:relative 를 두면
+    // 클래스의 position:sticky 를 덮어써서 sticky 가 작동하지 않는다(과거 버그).
+    // sticky 자체가 abs 자식의 positioning context 를 만들기 때문에 리사이즈 핸들의
+    // absolute 배치는 그대로 동작한다.
   };
 
   function startResize(e: React.PointerEvent) {
@@ -419,8 +431,10 @@ function SortableHeader({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted/50 select-none",
-        isDragging && "z-20",
+        // sticky top-0 + 불투명 bg-muted 로 헤더 고정 — 반투명(bg-muted/50)이면 스크롤되는 행이 비쳐 가독성 ↓
+        "h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted select-none sticky top-0 z-20",
+        // 드래그 중에는 다른 sticky th 들 위로 띄움
+        isDragging && "z-30",
       )}
     >
       <div className="flex items-center justify-between gap-1 pl-2 pr-1 group">

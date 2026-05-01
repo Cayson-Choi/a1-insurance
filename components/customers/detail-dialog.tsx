@@ -148,8 +148,9 @@ export function DetailDialog({
     else params.set("page", String(currentPage));
     const qs = params.toString();
     const targetUrl = `/customers${qs ? `?${qs}` : ""}`;
-    // window.location.assign 으로 강제 full navigation — router.push 가 parallel route 의
+    // window.location.assign 으로 강제 full navigation — router.push/replace 가 parallel route 의
     // intercepting modal 이 활성인 상태에서 confused 해서 닫지 못하는 경우 회피.
+    // (Next.js 16.2 에서도 router.replace 로 닫히지 않는 회귀 재현됨 — 풀 리로드 유지)
     if (typeof window !== "undefined") {
       window.location.assign(targetUrl);
     } else {
