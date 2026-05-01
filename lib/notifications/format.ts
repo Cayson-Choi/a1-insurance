@@ -18,14 +18,22 @@ export function simplifyUserAgent(ua: string | null | undefined): string {
   return `${browser} / ${os}`;
 }
 
+// 서버 timezone (Vercel = UTC) 과 무관하게 항상 한국 시간으로 포맷.
+// d.getHours() 등은 서버 로컬 시간이라 UTC 환경에선 9시간 빠르게 표시되는 회귀 유발 — 사용 금지.
+const KST_FORMATTER = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 export function fmtKST(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  // sv-SE locale 은 ISO-like "YYYY-MM-DD HH:MM:SS" 를 그대로 반환해 추가 가공 불필요.
+  return KST_FORMATTER.format(d);
 }
 
 export type LoginNotifyInput = {
