@@ -32,7 +32,8 @@ export function IdleTimeout() {
       logoutTimerRef.current = setTimeout(() => {
         toast.error("유휴 시간 초과로 로그아웃 되었습니다.", { duration: 4000 });
         startTransition(() => {
-          logoutAction();
+          // "idle" 사유 전달 — Slack/Telegram 알림에서 사용자 자발 로그아웃과 구분 표시.
+          logoutAction("idle");
         });
       }, IDLE_LIMIT_MS);
     }

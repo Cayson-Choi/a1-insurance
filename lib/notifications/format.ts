@@ -46,6 +46,18 @@ export type ForceLogoutNotifyInput = {
   at: Date;
 };
 
+export type LogoutReason = "user" | "idle";
+
+export type LogoutNotifyInput = {
+  agentId: string;
+  name: string | null;
+  role: "admin" | "manager" | "agent" | null;
+  reason: LogoutReason;
+  ip: string | null;
+  userAgent: string | null;
+  at: Date;
+};
+
 /** 여러 줄 plain text 메시지 생성 (Slack·Telegram 공통 사용) */
 export function buildLoginText(input: LoginNotifyInput): string {
   const icon = input.success ? "🔐" : "🚨";
@@ -77,6 +89,24 @@ export function buildForceLogoutText(input: ForceLogoutNotifyInput): string {
     `⛔ DB-CRM 강제 로그아웃`,
     `• 대상: ${input.targetName ?? "-"} (${input.targetAgentId})`,
     `• 관리자: ${input.actorAgentId}`,
+    `• 시각: ${fmtKST(input.at)}`,
+  ].join("\n");
+}
+
+export function buildLogoutText(input: LogoutNotifyInput): string {
+  const icon = input.reason === "idle" ? "💤" : "👋";
+  const title = input.reason === "idle" ? "유휴 자동 로그아웃" : "로그아웃";
+  const roleLabel =
+    input.role === "admin"
+      ? "관리자"
+      : input.role === "manager"
+        ? "매니저"
+        : "담당자";
+  return [
+    `${icon} DB-CRM ${title}`,
+    `• ${input.name ?? "-"} (${input.agentId}) · ${roleLabel}`,
+    `• IP: ${input.ip ?? "unknown"}`,
+    `• 브라우저: ${simplifyUserAgent(input.userAgent)}`,
     `• 시각: ${fmtKST(input.at)}`,
   ].join("\n");
 }

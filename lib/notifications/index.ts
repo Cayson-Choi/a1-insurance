@@ -6,13 +6,15 @@ import { sendTelegram } from "@/lib/notifications/telegram";
 import {
   buildForceLogoutText,
   buildLoginText,
+  buildLogoutText,
   simplifyUserAgent,
   type ForceLogoutNotifyInput,
   type LoginNotifyInput,
+  type LogoutNotifyInput,
 } from "@/lib/notifications/format";
 
 export { simplifyUserAgent };
-export type { LoginNotifyInput, ForceLogoutNotifyInput };
+export type { LoginNotifyInput, ForceLogoutNotifyInput, LogoutNotifyInput };
 
 function dispatch(text: string): void {
   // 양 채널 병행 — Promise.allSettled 로 하나가 느려도 다른 쪽 영향 X
@@ -25,4 +27,8 @@ export function notifyLogin(input: LoginNotifyInput): void {
 
 export function notifyForceLogout(input: ForceLogoutNotifyInput): void {
   dispatch(buildForceLogoutText(input));
+}
+
+export function notifyLogout(input: LogoutNotifyInput): void {
+  dispatch(buildLogoutText(input));
 }
