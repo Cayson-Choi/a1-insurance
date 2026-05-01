@@ -24,6 +24,18 @@ function getClientIp(h: Headers): string | null {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  logger: {
+    error(error) {
+      // 만료/키 변경된 쿠키에서 발생하는 JWTSessionError 는 비치명적 — 미들웨어가 로그인으로 보내준다.
+      // dev overlay 가 잡지 못하도록 조용히 무시.
+      if (error?.name === "JWTSessionError" || error?.name === "JWEDecryptionFailed") return;
+      console.error(error);
+    },
+    warn(code) {
+      console.warn(`[auth] ${code}`);
+    },
+    debug() {},
+  },
   providers: [
     Credentials({
       name: "담당자ID",
