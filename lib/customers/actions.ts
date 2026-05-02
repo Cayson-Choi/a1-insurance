@@ -313,6 +313,26 @@ export async function bulkDeleteCustomersAction(
   return { ok: true, deleted: existing.length };
 }
 
+export async function deleteAllCustomersAction(): Promise<BulkDeleteResult> {
+  const actor = await requireAdmin();
+
+  const deleted = await db.transaction(async (tx) => {
+    const result = await tx.delete(customers);
+    await tx.insert(auditLogs).values({
+      actorAgentId: actor.agentId,
+      customerId: null,
+      action: "bulk_change",
+      before: { deletedAllCustomers: false },
+      after: { deletedAllCustomers: true, count: result.count },
+    });
+    return result;
+  });
+
+  revalidatePath("/customers");
+  revalidatePath("/admin/audit");
+  return { ok: true, deleted: deleted.count };
+}
+
 // revealRrnAction 제거 — 주민번호는 평문으로 저장·표시되므로 별도 복호화 불필요
 
 type BulkResult =

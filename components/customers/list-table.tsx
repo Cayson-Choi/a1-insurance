@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -30,7 +30,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
 import { BulkDeleteDialog } from "@/components/customers/bulk-delete-dialog";
@@ -79,7 +78,11 @@ export function ListTable({
   const searchParams = useSearchParams();
   const { order, widths, setOrder, setMultiWidths, resetAll, hydrated } = useTablePrefs();
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const selectedRef = useRef<Set<string>>(new Set());
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [selectedIdsSnapshot, setSelectedIdsSnapshot] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkDateOpen, setBulkDateOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -124,30 +127,63 @@ export function ListTable({
     setOrder(merged);
   }
 
-  function toggleOne(id: string, checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
+  const syncSelectionCount = useCallback(() => {
+    setSelectedCount(selectedRef.current.size);
+  }, []);
+
+  const toggleOne = useCallback((id: string, checked: boolean, row?: HTMLTableRowElement | null) => {
+    if (checked) selectedRef.current.add(id);
+    else selectedRef.current.delete(id);
+    row?.classList.toggle("bg-brand/40", checked);
+    row?.classList.toggle("hover:bg-brand/50", checked);
+    syncSelectionCount();
+  }, [syncSelectionCount]);
+
   function toggleAll(checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const r of rows) {
-        if (checked) next.add(r.id);
-        else next.delete(r.id);
-      }
-      return next;
-    });
+    selectedRef.current = checked ? new Set(rows.map((r) => r.id)) : new Set();
+    const table = tableRef.current;
+    if (table) {
+      table.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
+        input.checked = checked;
+        const row = input.closest("tr");
+        row?.classList.toggle("bg-brand/40", checked);
+        row?.classList.toggle("hover:bg-brand/50", checked);
+      });
+    }
+    syncSelectionCount();
   }
+
   function clearSelection() {
-    setSelected(new Set());
+    toggleAll(false);
   }
-  const selectedIds = useMemo(() => Array.from(selected), [selected]);
-  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const someSelected = !allSelected && rows.some((r) => selected.has(r.id));
+
+  function snapshotSelection() {
+    const ids = Array.from(selectedRef.current);
+    setSelectedIdsSnapshot(ids);
+    return ids;
+  }
+
+  const allSelected = rows.length > 0 && selectedCount === rows.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected, selectedCount]);
+
+  useEffect(() => {
+    selectedRef.current = new Set();
+    queueMicrotask(() => setSelectedCount(0));
+    const table = tableRef.current;
+    if (table) {
+      table.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
+        input.checked = false;
+        const row = input.closest("tr");
+        row?.classList.remove("bg-brand/40", "hover:bg-brand/50");
+      });
+    }
+  }, [rows]);
 
   function changeSort(columnId: CustomerColumnId) {
     const def = CUSTOMER_COLUMNS.find((c) => c.id === columnId);
@@ -219,7 +255,7 @@ export function ListTable({
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
-          <table className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
+          <table ref={tableRef} className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
             <colgroup>
               {canBulkEdit ? <col style={{ width: 40 }} /> : null}
               {visibleIds.map((id) => (
@@ -230,11 +266,13 @@ export function ListTable({
               <tr>
                 {canBulkEdit ? (
                   <th className="h-10 px-3 text-left align-middle border-b border-r bg-muted sticky top-0 z-20">
-                    <Checkbox
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
                       checked={allSelected}
-                      indeterminate={someSelected}
-                      onCheckedChange={(v) => toggleAll(v === true)}
+                      onChange={(e) => toggleAll(e.currentTarget.checked)}
                       aria-label="현재 페이지 전체 선택"
+                      className="h-4 w-4 accent-primary"
                     />
                   </th>
                 ) : null}
@@ -264,49 +302,37 @@ export function ListTable({
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => {
-                const href = `/customers/${c.id}${preservedQuery ? `?${preservedQuery}` : ""}`;
-                const isSelected = selected.has(c.id);
-                return (
-                  <tr
-                    key={c.id}
-                    className={cn(
-                      "border-b last:border-0 hover:bg-brand/25",
-                      isSelected && "bg-brand/40 hover:bg-brand/50",
-                    )}
-                  >
-                    {canBulkEdit ? (
-                      <td className="px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(v) => toggleOne(c.id, v === true)}
-                          aria-label={`${c.name} 선택`}
-                        />
-                      </td>
-                    ) : null}
-                    {visibleIds.map((id) => (
-                      <DataCell key={id} columnId={id} customer={c} href={href} canUnmaskPhone={canUnmaskPhone} />
-                    ))}
-                  </tr>
-                );
-              })}
+              {rows.map((c) => (
+                <CustomerRow
+                  key={c.id}
+                  customer={c}
+                  visibleIds={visibleIds}
+                  preservedQuery={preservedQuery}
+                  canUnmaskPhone={canUnmaskPhone}
+                  canBulkEdit={canBulkEdit}
+                  onToggle={toggleOne}
+                />
+              ))}
             </tbody>
           </table>
         </DndContext>
       </div>
       </div>
 
-      {canBulkEdit && selected.size > 0 ? (
+      {canBulkEdit && selectedCount > 0 ? (
         <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background/95 backdrop-blur shadow-xl ring-1 ring-foreground/10 px-4 py-2 flex items-center gap-3">
           <span className="text-sm font-medium">
-            <b className="text-brand-accent tabular-nums">{selected.size}</b>건 선택됨
+            <b className="text-brand-accent tabular-nums">{selectedCount}</b>건 선택됨
           </span>
           {canBulkReassign ? (
             <Button
               type="button"
               size="sm"
               className="bg-brand text-brand-foreground hover:bg-brand-hover"
-              onClick={() => setBulkOpen(true)}
+              onClick={() => {
+                snapshotSelection();
+                setBulkOpen(true);
+              }}
             >
               <UserCog className="h-4 w-4" />
               담당자 일괄 변경
@@ -317,7 +343,10 @@ export function ListTable({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => setBulkDateOpen(true)}
+              onClick={() => {
+                snapshotSelection();
+                setBulkDateOpen(true);
+              }}
             >
               <CalendarClock className="h-4 w-4" />
               DB 등록일 일괄 변경
@@ -328,7 +357,10 @@ export function ListTable({
               type="button"
               size="sm"
               variant="destructive"
-              onClick={() => setBulkDeleteOpen(true)}
+              onClick={() => {
+                snapshotSelection();
+                setBulkDeleteOpen(true);
+              }}
             >
               <Trash2 className="h-4 w-4" />
               선택 삭제
@@ -351,8 +383,8 @@ export function ListTable({
         <BulkReassignDialog
           open={bulkOpen}
           onOpenChange={setBulkOpen}
-          selectedCount={selected.size}
-          selectedIds={selectedIds}
+          selectedCount={selectedCount}
+          selectedIds={selectedIdsSnapshot}
           agents={agents}
           onDone={clearSelection}
         />
@@ -361,8 +393,8 @@ export function ListTable({
         <BulkUpdateDateDialog
           open={bulkDateOpen}
           onOpenChange={setBulkDateOpen}
-          selectedCount={selected.size}
-          selectedIds={selectedIds}
+          selectedCount={selectedCount}
+          selectedIds={selectedIdsSnapshot}
           onDone={clearSelection}
         />
       ) : null}
@@ -370,8 +402,8 @@ export function ListTable({
         <BulkDeleteDialog
           open={bulkDeleteOpen}
           onOpenChange={setBulkDeleteOpen}
-          selectedCount={selected.size}
-          selectedIds={selectedIds}
+          selectedCount={selectedCount}
+          selectedIds={selectedIdsSnapshot}
           onDone={clearSelection}
         />
       ) : null}
@@ -508,7 +540,50 @@ function SortableHeader({
 
 // ---------------- Data Cell ----------------
 
-function DataCell({
+const CustomerRow = memo(function CustomerRow({
+  customer,
+  visibleIds,
+  preservedQuery,
+  canUnmaskPhone,
+  canBulkEdit,
+  onToggle,
+}: {
+  customer: ListedCustomer;
+  visibleIds: CustomerColumnId[];
+  preservedQuery: string;
+  canUnmaskPhone: boolean;
+  canBulkEdit: boolean;
+  onToggle: (id: string, checked: boolean, row?: HTMLTableRowElement | null) => void;
+}) {
+  const href = `/customers/${customer.id}${preservedQuery ? `?${preservedQuery}` : ""}`;
+
+  return (
+    <tr className="border-b last:border-0 hover:bg-brand/25">
+      {canBulkEdit ? (
+        <td className="px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            data-customer-select="true"
+            onChange={(e) => onToggle(customer.id, e.currentTarget.checked, e.currentTarget.closest("tr"))}
+            aria-label={`${customer.name} 선택`}
+            className="h-4 w-4 accent-primary"
+          />
+        </td>
+      ) : null}
+      {visibleIds.map((id) => (
+        <DataCell
+          key={id}
+          columnId={id}
+          customer={customer}
+          href={href}
+          canUnmaskPhone={canUnmaskPhone}
+        />
+      ))}
+    </tr>
+  );
+});
+
+const DataCell = memo(function DataCell({
   columnId,
   customer,
   href,
@@ -528,7 +603,7 @@ function DataCell({
       </Link>
     </td>
   );
-}
+});
 
 function renderCellContent(
   id: CustomerColumnId,

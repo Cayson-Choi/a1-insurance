@@ -11,6 +11,7 @@ import { listCustomers, listAgents, parseFilter } from "@/lib/customers/queries"
 import { SearchBar } from "@/components/customers/search-bar";
 import { ListTable } from "@/components/customers/list-table";
 import { Pagination } from "@/components/customers/pagination";
+import { DeleteAllCustomersDialog } from "@/components/customers/delete-all-customers-dialog";
 
 export const metadata: Metadata = {
   title: "고객 목록",
@@ -62,18 +63,21 @@ export default async function CustomersPage({ searchParams }: PageProps) {
               : "본인에게 배정된 고객 목록입니다."}
           </p>
         </div>
-        {canExport ? (
-          <a
-            href={`/api/customers/export${preservedQuery ? `?${preservedQuery}` : ""}`}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium hover:bg-accent transition"
-            target="_blank"
-            rel="noreferrer"
-            title="현재 검색 조건 그대로 엑셀 다운로드"
-          >
-            <Download className="h-4 w-4" />
-            엑셀 다운로드
-          </a>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {canDelete && isAdminRole(user) ? <DeleteAllCustomersDialog /> : null}
+          {canExport ? (
+            <a
+              href={`/api/customers/export${preservedQuery ? `?${preservedQuery}` : ""}`}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium hover:bg-accent transition"
+              target="_blank"
+              rel="noreferrer"
+              title="현재 검색 조건 그대로 엑셀 다운로드"
+            >
+              <Download className="h-4 w-4" />
+              엑셀 다운로드
+            </a>
+          ) : null}
+        </div>
       </div>
 
       <Suspense>

@@ -54,7 +54,7 @@ export function BulkReassignDialog({
       onOpenChange(false);
       setTargetAgent("");
       onDone();
-      router.refresh();
+      window.setTimeout(() => router.refresh(), 0);
     });
   }
 

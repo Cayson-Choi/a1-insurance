@@ -48,7 +48,7 @@ export function BulkUpdateDateDialog({
       setDate("");
       setClearMode(false);
       onDone();
-      router.refresh();
+      window.setTimeout(() => router.refresh(), 0);
     });
   }
 

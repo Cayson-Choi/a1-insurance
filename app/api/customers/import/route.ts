@@ -29,6 +29,7 @@ import {
 // 운영 데이터 규모(~수만 건) 고려 50,000 행이면 충분.
 const MAX_IMPORT_ROWS = 50_000;
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+const IMPORT_INSERT_CHUNK_SIZE = 500;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -265,6 +266,7 @@ export async function POST(req: NextRequest) {
       const byCode = new Map<string, Customer>();
       const byRrn = new Map<string, Customer>();
       const byNamePhone = new Map<string, Customer>();
+      const pendingInserts: NewCustomer[] = [];
       for (const c of allExisting) {
         if (c.customerCode) byCode.set(c.customerCode, c);
         const frontHash = getStoredRrnFrontHash(c);
@@ -407,28 +409,19 @@ export async function POST(req: NextRequest) {
             updatedAt: excelUpdatedAt ?? new Date(),
           };
 
-          const [created] = await tx
-            .insert(customers)
-            .values(insertValues)
-            .returning();
-          inserted++;
+          pendingInserts.push(insertValues);
 
           // 같은 엑셀 안에 동일 식별자 가진 행이 또 나올 수 있으니 맵 업데이트 → 두 번째 행부터 UPDATE 로 빠짐
-          if (created) {
-            if (created.customerCode) byCode.set(created.customerCode, created);
-            const frontHash = getStoredRrnFrontHash(created);
-            const backHash = getStoredRrnBackHash(created);
-            if (frontHash && backHash) {
-              byRrn.set(`${frontHash}|${backHash}`, created);
-            }
-            if (created.name && created.phone1) {
-              byNamePhone.set(
-                `${created.name}|${normalizePhone(created.phone1)}`,
-                created,
-              );
-            }
-          }
         }
+      }
+
+      for (let i = 0; i < pendingInserts.length; i += IMPORT_INSERT_CHUNK_SIZE) {
+        const chunk = pendingInserts.slice(i, i + IMPORT_INSERT_CHUNK_SIZE);
+        const result = await tx
+          .insert(customers)
+          .values(chunk)
+          .onConflictDoNothing();
+        inserted += result.count;
       }
     });
   } catch (e) {

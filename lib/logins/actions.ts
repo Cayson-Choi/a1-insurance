@@ -30,3 +30,12 @@ export async function deleteLoginEventsAction(
   revalidatePath("/admin/logins");
   return { ok: true, deleted: deleted.count };
 }
+
+export async function deleteAllLoginEventsAction(): Promise<DeleteLoginEventsResult> {
+  await requireAdmin();
+
+  const deleted = await db.delete(loginEvents);
+
+  revalidatePath("/admin/logins");
+  return { ok: true, deleted: deleted.count };
+}

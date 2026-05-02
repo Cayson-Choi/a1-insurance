@@ -30,3 +30,12 @@ export async function deleteAuditLogsAction(
   revalidatePath("/admin/audit");
   return { ok: true, deleted: deleted.count };
 }
+
+export async function deleteAllAuditLogsAction(): Promise<DeleteAuditLogsResult> {
+  await requireAdmin();
+
+  const deleted = await db.delete(auditLogs);
+
+  revalidatePath("/admin/audit");
+  return { ok: true, deleted: deleted.count };
+}

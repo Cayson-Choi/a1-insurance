@@ -6,6 +6,7 @@ import { listAllUsers } from "@/lib/users/queries";
 import { LoginFilterBar } from "@/components/admin/login-filter";
 import { LoginHistoryTable } from "@/components/admin/login-history-table";
 import { LoginHistoryPagination } from "@/components/admin/login-history-pagination";
+import { DeleteAllLoginEventsDialog } from "@/components/admin/delete-all-login-events-dialog";
 
 export const metadata: Metadata = {
   title: "로그인 이력",
@@ -25,11 +26,14 @@ export default async function AdminLoginsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">로그인 이력</h1>
-        <p className="text-sm text-muted-foreground">
-          로그인 성공·실패 기록입니다. 특정 사용자·기간·결과별로 필터할 수 있으며, 감사 증거로 활용 가능합니다.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">로그인 이력</h1>
+          <p className="text-sm text-muted-foreground">
+            로그인 성공·실패 기록입니다. 특정 사용자·기간·결과별로 필터할 수 있으며, 감사 증거로 활용 가능합니다.
+          </p>
+        </div>
+        <DeleteAllLoginEventsDialog />
       </div>
 
       <Suspense>
