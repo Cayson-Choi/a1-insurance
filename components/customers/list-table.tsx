@@ -11,6 +11,7 @@ import {
   GripVertical,
   Inbox,
   RotateCcw,
+  Trash2,
   UserCog,
   X,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { CallResultBadge } from "@/components/customers/call-result-badge";
+import { BulkDeleteDialog } from "@/components/customers/bulk-delete-dialog";
 import { BulkReassignDialog } from "@/components/customers/bulk-reassign-dialog";
 import { BulkUpdateDateDialog } from "@/components/customers/bulk-update-date-dialog";
 import { useTablePrefs } from "@/components/customers/use-table-prefs";
@@ -55,6 +57,7 @@ type Props = {
   canBulkReassign: boolean;
   // DB 등록일 일괄 변경(= admin 전용). "DB 등록일 일괄 변경" 버튼.
   canBulkDate: boolean;
+  canBulkDelete: boolean;
   agents: Array<{ agentId: string; name: string }>;
   sort: SortKey | null;
   dir: SortDir;
@@ -67,6 +70,7 @@ export function ListTable({
   canUnmaskPhone,
   canBulkReassign,
   canBulkDate,
+  canBulkDelete,
   agents,
   sort,
   dir,
@@ -78,9 +82,10 @@ export function ListTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkDateOpen, setBulkDateOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // 체크박스 컬럼은 어느 일괄 기능이든 하나라도 가능하면 노출.
-  const canBulkEdit = canBulkReassign || canBulkDate;
+  const canBulkEdit = canBulkReassign || canBulkDate || canBulkDelete;
 
   // 보이는 컬럼만 추림 (admin 전용은 권한 없으면 제외)
   const visibleIds = useMemo(
@@ -318,6 +323,17 @@ export function ListTable({
               DB 등록일 일괄 변경
             </Button>
           ) : null}
+          {canBulkDelete ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              선택 삭제
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -345,6 +361,15 @@ export function ListTable({
         <BulkUpdateDateDialog
           open={bulkDateOpen}
           onOpenChange={setBulkDateOpen}
+          selectedCount={selected.size}
+          selectedIds={selectedIds}
+          onDone={clearSelection}
+        />
+      ) : null}
+      {canBulkDelete ? (
+        <BulkDeleteDialog
+          open={bulkDeleteOpen}
+          onOpenChange={setBulkDeleteOpen}
           selectedCount={selected.size}
           selectedIds={selectedIds}
           onDone={clearSelection}

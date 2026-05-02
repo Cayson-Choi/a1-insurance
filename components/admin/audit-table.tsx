@@ -1,17 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowRight,
   Eye,
   FileSpreadsheet,
   Inbox,
   KeyRound,
+  Loader2,
   LogOut,
   PencilLine,
   ShieldAlert,
+  Trash2,
+  UserCog,
   UserMinus,
   UserPlus,
   Users,
-  UserCog,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -22,8 +32,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatDateTime } from "@/lib/format";
 import { diffFields } from "@/lib/audit/diff";
+import { deleteAuditLogsAction } from "@/lib/audit/actions";
 import type { AuditRow } from "@/lib/audit/queries";
 
 const ACTION_META: Record<
@@ -82,7 +95,6 @@ const ACTION_META: Record<
   },
 };
 
-// 미지정 액션 fallback (호환성).
 const UNKNOWN_META = {
   label: "기타",
   className: "bg-slate-50 text-slate-700 border-slate-200",
@@ -91,24 +103,25 @@ const UNKNOWN_META = {
 
 function Summary({ row }: { row: AuditRow }) {
   if (row.action === "rrn_decrypt") {
-    return <span className="text-muted-foreground">주민번호 복호화 열람</span>;
+    return <span className="text-muted-foreground">주민번호 보호값 조회</span>;
   }
   if (row.action === "agent_change" || row.action === "bulk_change") {
-    const b = (row.before as { agentId?: string } | null)?.agentId ?? "미배정";
-    const a = (row.after as { agentId?: string } | null)?.agentId ?? "미배정";
+    const before = (row.before as { agentId?: string } | null)?.agentId ?? "미배정";
+    const after = (row.after as { agentId?: string } | null)?.agentId ?? "미배정";
     return (
       <span className="font-mono text-xs">
-        {b} <ArrowRight className="inline h-3 w-3" /> {a}
+        {before} <ArrowRight className="inline h-3 w-3" /> {after}
       </span>
     );
   }
   if (row.action === "import") {
-    const a = row.after as
+    const after = row.after as
       | { total?: number; updated?: number; inserted?: number }
       | null;
     return (
       <span className="text-xs">
-        총 <b>{a?.total ?? 0}</b>건 — 신규 {a?.inserted ?? 0} · 갱신 {a?.updated ?? 0}
+        총 <b>{after?.total ?? 0}</b>건 · 신규 {after?.inserted ?? 0} · 갱신{" "}
+        {after?.updated ?? 0}
       </span>
     );
   }
@@ -118,16 +131,16 @@ function Summary({ row }: { row: AuditRow }) {
       | null;
     return (
       <span className="text-xs">
-        {target?.name ?? "—"} · {target?.agentId ?? "—"}
+        {target?.name ?? "-"} · {target?.agentId ?? "-"}
         {target?.role ? ` (${target.role})` : ""}
       </span>
     );
   }
   if (row.action === "password_reset" || row.action === "force_logout") {
-    const t = row.after as { agentId?: string; name?: string } | null;
+    const target = row.after as { agentId?: string; name?: string } | null;
     return (
       <span className="text-xs">
-        대상: {t?.name ?? "—"} · {t?.agentId ?? "—"}
+        대상 {target?.name ?? "-"} · {target?.agentId ?? "-"}
       </span>
     );
   }
@@ -150,6 +163,52 @@ function Summary({ row }: { row: AuditRow }) {
 }
 
 export function AuditTable({ rows }: { rows: AuditRow[] }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const selectedIds = useMemo(() => Array.from(selected), [selected]);
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someSelected = !allSelected && rows.some((r) => selected.has(r.id));
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const row of rows) {
+        if (checked) next.add(row.id);
+        else next.delete(row.id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function deleteSelected() {
+    startTransition(async () => {
+      const res = await deleteAuditLogsAction(selectedIds);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`${res.deleted}건의 변경 이력을 삭제했습니다.`);
+      setConfirmOpen(false);
+      clearSelection();
+      router.refresh();
+    });
+  }
+
   if (!rows.length) {
     return (
       <div className="rounded-lg border border-dashed bg-card/50 py-16 text-center">
@@ -162,58 +221,148 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
   }
 
   return (
-    <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
-      <Table className="min-w-[800px]">
-        <TableHeader className="bg-muted/50">
-          <TableRow>
-            <TableHead className="w-44">일시</TableHead>
-            <TableHead className="w-32">작업자</TableHead>
-            <TableHead className="w-32">액션</TableHead>
-            <TableHead className="w-40">대상 고객</TableHead>
-            <TableHead>내용 요약</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => {
-            const meta = ACTION_META[r.action] ?? UNKNOWN_META;
-            const Icon = meta.icon;
-            return (
-              <TableRow key={r.id}>
-                <TableCell className="tabular-nums text-xs">
-                  {formatDateTime(r.createdAt)}
-                </TableCell>
-                <TableCell className="text-sm">
-                  <span className="font-medium">{r.actorName ?? "—"}</span>
-                  <span className="ml-1 text-muted-foreground font-mono text-[11px]">
-                    {r.actorAgentId}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={`gap-1 text-xs ${meta.className}`}>
-                    <Icon className="h-3 w-3" />
-                    {meta.label}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {r.customerId ? (
-                    <Link
-                      href={`/customers/${r.customerId}`}
-                      className="text-sm text-brand-accent hover:underline"
-                    >
-                      {r.customerName ?? r.customerId.slice(0, 8)}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-sm max-w-xl">
-                  <Summary row={r} />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
+        <Table className="min-w-[840px]">
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onCheckedChange={(v) => toggleAll(v === true)}
+                  aria-label="현재 페이지 변경 이력 전체 선택"
+                />
+              </TableHead>
+              <TableHead className="w-44">일시</TableHead>
+              <TableHead className="w-32">작업자</TableHead>
+              <TableHead className="w-32">액션</TableHead>
+              <TableHead className="w-40">대상 고객</TableHead>
+              <TableHead>내용 요약</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => {
+              const meta = ACTION_META[row.action] ?? UNKNOWN_META;
+              const Icon = meta.icon;
+              const isSelected = selected.has(row.id);
+              return (
+                <TableRow key={row.id} className={isSelected ? "bg-brand/30" : undefined}>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(v) => toggleOne(row.id, v === true)}
+                      aria-label="변경 이력 선택"
+                    />
+                  </TableCell>
+                  <TableCell className="tabular-nums text-xs">
+                    {formatDateTime(row.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <span className="font-medium">{row.actorName ?? "-"}</span>
+                    <span className="ml-1 text-muted-foreground font-mono text-[11px]">
+                      {row.actorAgentId}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`gap-1 text-xs ${meta.className}`}>
+                      <Icon className="h-3 w-3" />
+                      {meta.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {row.customerId ? (
+                      <Link
+                        href={`/customers/${row.customerId}`}
+                        className="text-sm text-brand-accent hover:underline"
+                      >
+                        {row.customerName ?? row.customerId.slice(0, 8)}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm max-w-xl">
+                    <Summary row={row} />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {selected.size > 0 ? (
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background/95 backdrop-blur shadow-xl ring-1 ring-foreground/10 px-4 py-2 flex items-center gap-3">
+          <span className="text-sm font-medium">
+            <b className="text-brand-accent tabular-nums">{selected.size}</b>건 선택됨
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={() => setConfirmOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            선택 삭제
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={clearSelection}
+          >
+            <X className="h-4 w-4" />
+            선택 해제
+          </Button>
+        </div>
+      ) : null}
+
+      <DialogPrimitive.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-open:animate-in data-open:fade-in-0" />
+          <DialogPrimitive.Popup className="fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
+            <div className="flex items-center gap-2 border-b px-5 py-3">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <DialogPrimitive.Title className="text-base font-semibold">
+                변경 이력 삭제
+              </DialogPrimitive.Title>
+            </div>
+            <div className="space-y-3 px-5 py-4 text-sm">
+              <div className="rounded-md bg-muted/50 px-3 py-2">
+                선택된 이력: <b>{selected.size}</b>건
+              </div>
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
+                이 작업은 <b>되돌릴 수 없습니다</b>. 감사 목적의 변경 이력이 영구 삭제됩니다.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-sidebar/40 px-5 py-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setConfirmOpen(false)}
+                disabled={pending}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={deleteSelected}
+                disabled={pending || selected.size === 0}
+              >
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                {selected.size}건 삭제
+              </Button>
+            </div>
+          </DialogPrimitive.Popup>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </>
   );
 }

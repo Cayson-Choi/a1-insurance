@@ -253,6 +253,66 @@ export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
   return { ok: true };
 }
 
+type BulkDeleteResult =
+  | { ok: true; deleted: number }
+  | { ok: false; error: string };
+
+export async function bulkDeleteCustomersAction(
+  customerIds: string[],
+): Promise<BulkDeleteResult> {
+  const actor = await requireUser();
+  const perms = await getPermissions(actor.agentId);
+  if (!perms?.canDelete) {
+    return { ok: false, error: "삭제 권한이 없습니다. 관리자에게 문의하세요." };
+  }
+
+  const validCustomerIds = normalizeUuidList(customerIds, MAX_BULK_CUSTOMERS);
+  if (!validCustomerIds) {
+    return { ok: false, error: "Invalid customer selection." };
+  }
+
+  const existing = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      phone1: customers.phone1,
+      agentId: customers.agentId,
+    })
+    .from(customers)
+    .where(inArray(customers.id, validCustomerIds));
+
+  if (!existing.length) {
+    return { ok: false, error: "삭제할 고객을 찾을 수 없습니다." };
+  }
+
+  if (!canSeeAllCustomers(actor) && existing.some((c) => c.agentId !== actor.agentId)) {
+    return { ok: false, error: "선택한 고객 중 삭제 권한이 없는 고객이 포함되어 있습니다." };
+  }
+
+  const existingIds = existing.map((c) => c.id);
+
+  await db.transaction(async (tx) => {
+    await tx.insert(auditLogs).values(
+      existing.map((c) => ({
+        actorAgentId: actor.agentId,
+        customerId: c.id,
+        action: "bulk_change" as const,
+        before: redactAuditPayload({
+          deleted: false,
+          name: c.name,
+          phone1: c.phone1,
+          agentId: c.agentId,
+        }),
+        after: { deleted: true },
+      })),
+    );
+    await tx.delete(customers).where(inArray(customers.id, existingIds));
+  });
+
+  revalidatePath("/customers");
+  return { ok: true, deleted: existing.length };
+}
+
 // revealRrnAction 제거 — 주민번호는 평문으로 저장·표시되므로 별도 복호화 불필요
 
 type BulkResult =

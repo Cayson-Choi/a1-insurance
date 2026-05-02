@@ -31,6 +31,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   // DB 등록일 일괄 변경은 관리자 전용(매니저 기본 권한에 포함 안 됨).
   const canBulkDate = isAdminRole(user);
   const canExport = user.canExport;
+  const canDelete = user.canDelete;
 
   const [list, agents] = await Promise.all([
     listCustomers(filter, user),
@@ -87,6 +88,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         canUnmaskPhone={true}
         canBulkReassign={canReassign}
         canBulkDate={canBulkDate}
+        canBulkDelete={canDelete}
         agents={agents}
         sort={filter.sort ?? null}
         dir={filter.dir ?? "asc"}

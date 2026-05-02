@@ -47,16 +47,20 @@ export function decryptPii(value: string | null | undefined): string | null {
   const [version, ivRaw, tagRaw, encryptedRaw] = value.split(":");
   if (version !== VERSION || !ivRaw || !tagRaw || !encryptedRaw) return null;
 
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    keyFromHex("PII_ENC_KEY"),
-    Buffer.from(ivRaw, "base64url"),
-  );
-  decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encryptedRaw, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
+  try {
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      keyFromHex("PII_ENC_KEY"),
+      Buffer.from(ivRaw, "base64url"),
+    );
+    decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedRaw, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    return null;
+  }
 }
 
 export function encodeRrnFields(input: {
