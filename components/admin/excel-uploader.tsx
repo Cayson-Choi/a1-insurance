@@ -205,7 +205,7 @@ function mergeApplyAggregate(target: ApplyResult, part: ApplyResult): ApplyResul
   target.updated += part.updated;
   target.unchanged += part.unchanged;
   target.inserted += part.inserted;
-  target.untouched += part.untouched;
+  target.untouched ||= part.untouched;
   target.matchedCode += part.matchedCode;
   target.matchedRrn += part.matchedRrn;
   target.matchedNamePhone += part.matchedNamePhone;
