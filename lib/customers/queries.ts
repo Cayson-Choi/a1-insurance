@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, users } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
@@ -11,6 +11,9 @@ function isValidRrnFront(s: string): boolean {
 function isValidRrnBack(s: string): boolean {
   return /^\d{7}$/.test(s);
 }
+
+const ALL_AGENT_FILTER = "__all";
+const UNASSIGNED_AGENT_FILTER = "__unassigned";
 
 export type CustomerFilter = {
   name?: string;
@@ -70,7 +73,7 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
     address: pick("addr")?.trim() || undefined,
     phone: phoneRaw || undefined,
     callResult: parseCallResult(pick("callResult")),
-    agentId: pick("agentId")?.trim() || undefined,
+    agentId: parseAgentId(pick("agentId")),
     rrnFront: isValidRrnFront(rrnFrontRaw) ? rrnFrontRaw : undefined,
     rrnBack: isValidRrnBack(rrnBackRaw) ? rrnBackRaw : undefined,
     birthYearFrom: parseYear(pick("byFrom")),
@@ -87,6 +90,13 @@ function parseYear(v: unknown): number | undefined {
   const n = Number(v.replace(/\D/g, ""));
   if (!Number.isFinite(n) || n < 1900 || n > 2100) return undefined;
   return Math.floor(n);
+}
+
+function parseAgentId(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const agentId = v.trim();
+  if (!agentId || agentId === ALL_AGENT_FILTER) return undefined;
+  return agentId;
 }
 
 // get-detail.ts 의 prev/next 계산이 목록의 정렬과 100% 동일하도록 export.
@@ -172,6 +182,8 @@ export function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | und
   // agent 는 본인 담당분만 보이도록 WHERE 절 강제.
   if (!canSeeAllCustomers(user)) {
     conds.push(eq(customers.agentId, user.agentId));
+  } else if (filter.agentId === UNASSIGNED_AGENT_FILTER) {
+    conds.push(isNull(customers.agentId));
   } else if (filter.agentId) {
     conds.push(eq(customers.agentId, filter.agentId));
   }

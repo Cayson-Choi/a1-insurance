@@ -15,6 +15,7 @@ import {
 import { CALL_RESULTS } from "@/lib/excel/column-map";
 
 const ALL = "__all";
+const UNASSIGNED = "__unassigned";
 const DEBOUNCE_MS = 400;
 
 export function SearchBar({
@@ -229,13 +230,16 @@ export function SearchBar({
           >
             <SelectTrigger className="h-9 w-full">
               <span className="truncate">
-                {agentId
+                {agentId === UNASSIGNED
+                  ? "미배정"
+                  : agentId
                   ? `${agents.find((a) => a.agentId === agentId)?.name ?? agentId} · ${agentId}`
                   : "전체"}
               </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>전체</SelectItem>
+              <SelectItem value={UNASSIGNED}>미배정</SelectItem>
               {agents.map((a) => (
                 <SelectItem key={a.agentId} value={a.agentId}>
                   {a.name} · {a.agentId}
