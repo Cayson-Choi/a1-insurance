@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const BATCH_ROW_LIMIT = 20_000;
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 type PreviewSampleRow = {
   rowNumber: number;
   name: string;
@@ -57,6 +60,181 @@ type ApplyResult = {
   createdAgentCount: number;
 };
 
+type UploadChunk = {
+  file: File;
+  rowCount: number;
+  index: number;
+  totalChunks: number;
+};
+
+type UploadOutcome =
+  | { ok: true; payload: PreviewResult | ApplyResult }
+  | { ok: false; error: string; headerErrors?: string[] };
+
+type ExcelJSImport = typeof import("exceljs");
+
+async function loadExcelJs(): Promise<ExcelJSImport> {
+  return import("exceljs");
+}
+
+async function splitWorkbookFile(file: File): Promise<UploadChunk[]> {
+  const ExcelJS = await loadExcelJs();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  const sheet = workbook.worksheets[0];
+  if (!sheet) throw new Error("시트를 찾을 수 없습니다.");
+
+  const rows: unknown[][] = [];
+  let headerValues: unknown[] | null = null;
+  sheet.eachRow({ includeEmpty: false }, (row: import("exceljs").Row, rowNumber: number) => {
+    if (rowNumber === 1) {
+      headerValues = [...(row.values as unknown[])];
+      return;
+    }
+    rows.push([...((row.values as unknown[]) ?? [])]);
+  });
+
+  if (!headerValues) throw new Error("헤더를 찾을 수 없습니다.");
+
+  const totalChunks = Math.max(1, Math.ceil(rows.length / BATCH_ROW_LIMIT));
+  const chunks: UploadChunk[] = [];
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * BATCH_ROW_LIMIT;
+    const end = Math.min(rows.length, start + BATCH_ROW_LIMIT);
+    const chunkWb = new ExcelJS.Workbook();
+    const chunkSheet = chunkWb.addWorksheet(sheet.name || "Sheet1");
+    chunkSheet.addRow(headerValues);
+    for (const values of rows.slice(start, end)) {
+      chunkSheet.addRow(values);
+    }
+    const buffer = await chunkWb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: XLSX_MIME });
+    const chunkFile = new File(
+      [blob],
+      file.name.replace(/\.xlsx$/i, `.${String(i + 1).padStart(2, "0")}.xlsx`),
+      { type: XLSX_MIME },
+    );
+    chunks.push({
+      file: chunkFile,
+      rowCount: end - start,
+      index: i + 1,
+      totalChunks,
+    });
+  }
+
+  return chunks;
+}
+
+async function uploadChunk(
+  file: File,
+  targetMode: "preview" | "apply",
+): Promise<UploadOutcome> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`/api/customers/import?mode=${targetMode}`, {
+    method: "POST",
+    body: fd,
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    return { ok: false, error: json.error ?? "업로드 실패", headerErrors: json.headerErrors };
+  }
+  return { ok: true, payload: json as PreviewResult | ApplyResult };
+}
+
+function createPreviewAggregate(): PreviewResult {
+  return {
+    ok: true,
+    total: 0,
+    existingCount: 0,
+    invalidCount: 0,
+    unknownAgentCount: 0,
+    autoCreateAgentCount: 0,
+    willUpdate: 0,
+    willInsert: 0,
+    matchedCode: 0,
+    matchedRrn: 0,
+    matchedNamePhone: 0,
+    previewSample: [],
+  };
+}
+
+function mergePreviewAggregate(target: PreviewResult, part: PreviewResult): PreviewResult {
+  target.total += part.total;
+  target.existingCount ||= part.existingCount;
+  target.invalidCount += part.invalidCount;
+  target.unknownAgentCount += part.unknownAgentCount;
+  target.autoCreateAgentCount += part.autoCreateAgentCount;
+  target.willUpdate += part.willUpdate;
+  target.willInsert += part.willInsert;
+  target.matchedCode += part.matchedCode;
+  target.matchedRrn += part.matchedRrn;
+  target.matchedNamePhone += part.matchedNamePhone;
+  if (target.previewSample.length < 10) {
+    target.previewSample.push(
+      ...part.previewSample.slice(0, Math.max(0, 10 - target.previewSample.length)),
+    );
+  }
+  return target;
+}
+
+function createApplyAggregate(): ApplyResult {
+  return {
+    ok: true,
+    total: 0,
+    existingTotal: 0,
+    updated: 0,
+    unchanged: 0,
+    inserted: 0,
+    untouched: 0,
+    matchedCode: 0,
+    matchedRrn: 0,
+    matchedNamePhone: 0,
+    skipped: 0,
+    invalidCount: 0,
+    unknownAgentCount: 0,
+    autoCreateAgentCount: 0,
+    createdAgentCount: 0,
+  };
+}
+
+function mergeApplyAggregate(target: ApplyResult, part: ApplyResult): ApplyResult {
+  target.total += part.total;
+  target.existingTotal ||= part.existingTotal;
+  target.updated += part.updated;
+  target.unchanged += part.unchanged;
+  target.inserted += part.inserted;
+  target.untouched += part.untouched;
+  target.matchedCode += part.matchedCode;
+  target.matchedRrn += part.matchedRrn;
+  target.matchedNamePhone += part.matchedNamePhone;
+  target.skipped += part.skipped;
+  target.invalidCount += part.invalidCount;
+  target.unknownAgentCount += part.unknownAgentCount;
+  target.autoCreateAgentCount += part.autoCreateAgentCount;
+  target.createdAgentCount += part.createdAgentCount;
+  return target;
+}
+
+function createEmptyPreview(headerErrors: string[], errorMessage: string): PreviewResult {
+  return {
+    ok: false,
+    total: 0,
+    existingCount: 0,
+    invalidCount: 0,
+    unknownAgentCount: 0,
+    autoCreateAgentCount: 0,
+    willUpdate: 0,
+    willInsert: 0,
+    matchedCode: 0,
+    matchedRrn: 0,
+    matchedNamePhone: 0,
+    previewSample: [],
+    headerErrors: headerErrors.length ? headerErrors : [errorMessage],
+  };
+}
+
 export function ExcelUploader() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,14 +244,56 @@ export function ExcelUploader() {
   const [mode, setMode] = useState<"idle" | "preview" | "apply">("idle");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  async function requestChunked(targetMode: "preview" | "apply") {
+    if (!file) return;
+    const chunks = await splitWorkbookFile(file);
+    if (targetMode === "preview") {
+      const aggregate = createPreviewAggregate();
+      for (const chunk of chunks) {
+        const result = await uploadChunk(chunk.file, "preview");
+        if (!result.ok) {
+          toast.error(result.error);
+          if (result.headerErrors) {
+            setPreview(createEmptyPreview(result.headerErrors, result.error));
+          }
+          return;
+        }
+        mergePreviewAggregate(aggregate, result.payload as PreviewResult);
+      }
+      setPreview(aggregate);
+      toast.success(`미리보기 완료 (${aggregate.total.toLocaleString("ko-KR")}건)`);
+      return;
+    }
+
+    const aggregate = createApplyAggregate();
+    for (const chunk of chunks) {
+      const result = await uploadChunk(chunk.file, "apply");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      mergeApplyAggregate(aggregate, result.payload as ApplyResult);
+    }
+
+    toast.success(
+      `업로드 완료: 업데이트 ${aggregate.updated}건 · 신규 ${aggregate.inserted}건 · 담당자 생성 ${aggregate.createdAgentCount}명 · 기존 유지 ${aggregate.untouched}건`,
+      { duration: 6000 },
+    );
+    setPreview(null);
+    setFile(null);
+    if (inputRef.current) inputRef.current.value = "";
+    startTransition(() => router.refresh());
+  }
+
   async function request(targetMode: "preview" | "apply") {
     if (!file) {
       toast.error("엑셀 파일을 선택하세요.");
       return;
     }
     setMode(targetMode);
+    return requestChunked(targetMode);
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", file as File);
     try {
       const res = await fetch(`/api/customers/import?mode=${targetMode}`, {
         method: "POST",
@@ -96,7 +316,10 @@ export function ExcelUploader() {
         );
         setPreview(null);
         setFile(null);
-        if (inputRef.current) inputRef.current.value = "";
+        const input = inputRef.current;
+        if (input) {
+          input!.value = "";
+        }
         startTransition(() => router.refresh());
       }
     } catch (e) {
