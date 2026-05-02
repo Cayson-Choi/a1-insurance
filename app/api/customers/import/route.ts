@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, auditLogs, users } from "@/lib/db/schema";
@@ -33,8 +33,8 @@ import {
   tooManyRequests,
 } from "@/lib/security/rate-limit";
 
-// 엑셀 1회 처리 상한 — 메모리 폭주(zip-bomb 변형)·UI 멈춤 방지.
-// 운영 데이터 규모(~수만 건) 고려 50,000 행이면 충분.
+// ?묒? 1??泥섎━ ?곹븳 ??硫붾え由???＜(zip-bomb 蹂??쨌UI 硫덉땄 諛⑹?.
+// ?댁쁺 ?곗씠??洹쒕え(~?섎쭔 嫄? 怨좊젮 50,000 ?됱씠硫?異⑸텇.
 const MAX_IMPORT_ROWS = 50_000;
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
@@ -43,14 +43,41 @@ const AGENT_ID_RE = /^[a-zA-Z0-9_-]{2,20}$/;
 
 type ExistingCustomerMatch = Pick<
   Customer,
-  "id" | "customerCode" | "agentId" | "name" | "phone1" | "rrnFrontHash" | "rrnBackHash"
+  | "id"
+  | "customerCode"
+  | "agentId"
+  | "name"
+  | "birthDate"
+  | "phone1"
+  | "job"
+  | "address"
+  | "addressDetail"
+  | "callResult"
+  | "dbProduct"
+  | "dbPremium"
+  | "dbHandler"
+  | "subCategory"
+  | "dbPolicyNo"
+  | "dbRegisteredAt"
+  | "mainCategory"
+  | "dbStartAt"
+  | "dbEndAt"
+  | "branch"
+  | "hq"
+  | "team"
+  | "fax"
+  | "reservationReceived"
+  | "dbCompany"
+  | "rrnFrontHash"
+  | "rrnBackEnc"
+  | "rrnBackHash"
 >;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * 전화번호 정규화: 숫자만 추출. 이름+전화1 매칭에서 사용.
+ * ?꾪솕踰덊샇 ?뺢퇋?? ?レ옄留?異붿텧. ?대쫫+?꾪솕1 留ㅼ묶?먯꽌 ?ъ슜.
  */
 function normalizePhone(p: string | null | undefined): string {
   if (!p) return "";
@@ -75,6 +102,89 @@ function isXlsxBuffer(buf: ArrayBuffer): boolean {
   return sig[0] === 0x50 && sig[1] === 0x4b && sig[2] === 0x03 && sig[3] === 0x04;
 }
 
+function normalizeDateKey(value: unknown): string {
+  if (!value) return "";
+  if (value instanceof Date) return Number.isNaN(value.valueOf()) ? "" : value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function sameValue(existing: unknown, next: unknown): boolean {
+  return String(existing ?? "") === String(next ?? "");
+}
+
+function buildCustomerPatch(
+  existing: ExistingCustomerMatch,
+  c: NewCustomer,
+  rrnFront: string | null,
+  rrnBack: string | null,
+): Partial<NewCustomer> {
+  const patch: Partial<NewCustomer> = {};
+  const setIf = <K extends keyof NewCustomer>(
+    key: K,
+    existingValue: unknown,
+    nextValue: NewCustomer[K] | null | undefined,
+  ) => {
+    if (nextValue !== null && nextValue !== undefined && !sameValue(existingValue, nextValue)) {
+      patch[key] = nextValue as NewCustomer[K];
+    }
+  };
+
+  setIf("customerCode", existing.customerCode, c.customerCode);
+  setIf("agentId", existing.agentId, c.agentId);
+  setIf("name", existing.name, c.name);
+  setIf("birthDate", normalizeDateKey(existing.birthDate), c.birthDate);
+  setIf("phone1", existing.phone1, c.phone1);
+  setIf("job", existing.job, c.job);
+  setIf("address", existing.address, c.address);
+  setIf("addressDetail", existing.addressDetail, c.addressDetail);
+  setIf("callResult", existing.callResult, c.callResult);
+  setIf("dbProduct", existing.dbProduct, c.dbProduct);
+  setIf("dbPremium", existing.dbPremium, c.dbPremium);
+  setIf("dbHandler", existing.dbHandler, c.dbHandler);
+  setIf("subCategory", existing.subCategory, c.subCategory);
+  setIf("dbPolicyNo", existing.dbPolicyNo, c.dbPolicyNo);
+  setIf("dbRegisteredAt", normalizeDateKey(existing.dbRegisteredAt), c.dbRegisteredAt);
+  setIf("mainCategory", existing.mainCategory, c.mainCategory);
+  setIf("dbStartAt", normalizeDateKey(existing.dbStartAt), c.dbStartAt);
+  setIf("dbEndAt", normalizeDateKey(existing.dbEndAt), c.dbEndAt);
+  setIf("branch", existing.branch, c.branch);
+  setIf("hq", existing.hq, c.hq);
+  setIf("team", existing.team, c.team);
+  setIf("fax", existing.fax, c.fax);
+  setIf("reservationReceived", normalizeDateKey(existing.reservationReceived), c.reservationReceived);
+  setIf("dbCompany", existing.dbCompany, c.dbCompany);
+
+  if (rrnFront && rrnBack) {
+    const encoded = encodeRrnFields({ rrnFront, rrnBack });
+    const nextFrontHash = encoded.rrnFrontHash;
+    const nextBackHash = encoded.rrnBackHash;
+    if (!sameValue(existing.rrnFrontHash, nextFrontHash)) {
+      patch.rrnFrontHash = nextFrontHash;
+    }
+    if (!sameValue(existing.rrnBackHash, nextBackHash)) {
+      patch.rrnBackHash = nextBackHash;
+    }
+    if (!sameValue(existing.rrnBackEnc, encoded.rrnBackEnc)) {
+      patch.rrnBackEnc = encoded.rrnBackEnc;
+    }
+  } else if (rrnFront) {
+    const encoded = encodeRrnFrontFields(rrnFront);
+    if (!sameValue(existing.rrnFrontHash, encoded.rrnFrontHash)) {
+      patch.rrnFrontHash = encoded.rrnFrontHash;
+    }
+  } else if (rrnBack) {
+    const encoded = encodeRrnBackFields(rrnBack);
+    if (!sameValue(existing.rrnBackEnc, encoded.rrnBackEnc)) {
+      patch.rrnBackEnc = encoded.rrnBackEnc;
+    }
+    if (!sameValue(existing.rrnBackHash, encoded.rrnBackHash)) {
+      patch.rrnBackHash = encoded.rrnBackHash;
+    }
+  }
+
+  return patch;
+}
+
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const res = NextResponse.json(body, init);
   return apiSecurityHeaders(res) as NextResponse;
@@ -83,7 +193,7 @@ function jsonNoStore(body: unknown, init?: ResponseInit) {
 export async function POST(req: NextRequest) {
   const me = await requireUser();
   if (!isSameOrigin(req)) {
-    return jsonNoStore({ error: "허용되지 않은 요청 출처입니다." }, { status: 403 });
+    return jsonNoStore({ error: "?덉슜?섏? ?딆? ?붿껌 異쒖쿂?낅땲??" }, { status: 403 });
   }
   const limited = rateLimit(rateLimitKey("customers-import", me.agentId, req), 8, 60_000);
   if (!limited.ok) return tooManyRequests(limited.resetAt);
@@ -91,7 +201,7 @@ export async function POST(req: NextRequest) {
   const perms = await getPermissions(me.agentId);
   if (!perms?.canCreate) {
     return jsonNoStore(
-      { error: "신규 등록(엑셀 업로드) 권한이 없습니다. 관리자에게 문의하세요." },
+      { error: "?좉퇋 ?깅줉(?묒? ?낅줈?? 沅뚰븳???놁뒿?덈떎. 愿由ъ옄?먭쾶 臾몄쓽?섏꽭??" },
       { status: 403 },
     );
   }
@@ -104,14 +214,14 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return jsonNoStore({ error: "파일이 첨부되지 않았습니다." }, { status: 400 });
+    return jsonNoStore({ error: "?뚯씪??泥⑤??섏? ?딆븯?듬땲??" }, { status: 400 });
   }
   if (file.size > MAX_IMPORT_BYTES) {
-    return jsonNoStore({ error: "10MB 이하 파일만 업로드 가능합니다." }, { status: 400 });
+    return jsonNoStore({ error: "10MB ?댄븯 ?뚯씪留??낅줈??媛?ν빀?덈떎." }, { status: 400 });
   }
-  // 확장자 우선 검증 + MIME 보조 검증.
-  // 일부 브라우저는 빈 문자열이나 application/octet-stream 을 보내므로 MIME 만으로는 막을 수 없고,
-  // 그렇다고 octet-stream 을 화이트리스트에 넣으면 임의 파일이 통과되므로 확장자(.xlsx/.xls) 만으로 차단한다.
+  // ?뺤옣???곗꽑 寃利?+ MIME 蹂댁“ 寃利?
+  // ?쇰? 釉뚮씪?곗???鍮?臾몄옄?댁씠??application/octet-stream ??蹂대궡誘濡?MIME 留뚯쑝濡쒕뒗 留됱쓣 ???녾퀬,
+  // 洹몃젃?ㅺ퀬 octet-stream ???붿씠?몃━?ㅽ듃???ｌ쑝硫??꾩쓽 ?뚯씪???듦낵?섎?濡??뺤옣??.xlsx/.xls) 留뚯쑝濡?李⑤떒?쒕떎.
   const ALLOWED_MIMES = new Set([
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
@@ -122,7 +232,7 @@ export async function POST(req: NextRequest) {
   const hasXlsxExt = lowerName.endsWith(".xlsx");
   if (!hasXlsxExt || !ALLOWED_MIMES.has(file.type)) {
     return jsonNoStore(
-      { error: "엑셀 파일(.xlsx)만 업로드 가능합니다." },
+      { error: "?묒? ?뚯씪(.xlsx)留??낅줈??媛?ν빀?덈떎." },
       { status: 400 },
     );
   }
@@ -130,7 +240,7 @@ export async function POST(req: NextRequest) {
   const buf = await file.arrayBuffer();
   if (!isXlsxBuffer(buf)) {
     return jsonNoStore(
-      { error: "유효한 .xlsx 파일이 아닙니다." },
+      { error: "?좏슚??.xlsx ?뚯씪???꾨떃?덈떎." },
       { status: 400 },
     );
   }
@@ -141,7 +251,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.warn("[import] workbook parse failed:", e);
     return jsonNoStore(
-      { error: "엑셀 파일을 읽을 수 없습니다. 파일 형식을 확인해주세요." },
+      { error: "?묒? ?뚯씪???쎌쓣 ???놁뒿?덈떎. ?뚯씪 ?뺤떇???뺤씤?댁＜?몄슂." },
       { status: 400 },
     );
   }
@@ -149,7 +259,7 @@ export async function POST(req: NextRequest) {
   if (parsed.total > MAX_IMPORT_ROWS) {
     return jsonNoStore(
       {
-        error: `한 번에 업로드 가능한 행은 최대 ${MAX_IMPORT_ROWS.toLocaleString()}건입니다. 파일을 분할해 주세요.`,
+        error: `??踰덉뿉 ?낅줈??媛?ν븳 ?됱? 理쒕? ${MAX_IMPORT_ROWS.toLocaleString()}嫄댁엯?덈떎. ?뚯씪??遺꾪븷??二쇱꽭??`,
       },
       { status: 400 },
     );
@@ -166,7 +276,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // agentId 유효성 검증: users 테이블에 존재하는지
+  // agentId ?좏슚??寃利? users ?뚯씠釉붿뿉 議댁옱?섎뒗吏
   const existingUsers = await db.query.users.findMany({
     columns: { agentId: true },
   });
@@ -181,13 +291,13 @@ export async function POST(req: NextRequest) {
     const agentId = row.customer.agentId;
     if (agentId) {
       if (!isValidAgentId(agentId)) {
-        row.errors.push(`담당자ID 형식 오류: ${agentId}`);
+        row.errors.push(`?대떦?륤D ?뺤떇 ?ㅻ쪟: ${agentId}`);
       } else if (!validAgentIds.has(agentId)) {
         if (canAutoCreateAgents) {
           missingAgents.set(agentId, agentNameFromRow(row.raw, agentId));
         } else {
           unknownAgentCount++;
-          row.errors.push(`미등록 담당자ID: ${agentId}`);
+          row.errors.push(`誘몃벑濡??대떦?륤D: ${agentId}`);
         }
       }
     }
@@ -195,30 +305,51 @@ export async function POST(req: NextRequest) {
   }
   const autoCreateAgentCount = canAutoCreateAgents ? missingAgents.size : 0;
 
-  // RBAC 스코프: agent 는 본인 담당분만 매칭 풀에 포함 — 타 담당자 고객을
-  // customer_code/주민/이름+전화 매칭으로 가로채는 우회 차단.
-  // admin·manager 는 전체.
+  // RBAC ?ㅼ퐫?? agent ??蹂몄씤 ?대떦遺꾨쭔 留ㅼ묶 ????ы븿 ??? ?대떦??怨좉컼??
+  // customer_code/二쇰?/?대쫫+?꾪솕 留ㅼ묶?쇰줈 媛濡쒖콈???고쉶 李⑤떒.
+  // admin쨌manager ???꾩껜.
   const scopeWhere = canSeeAllCustomers(me) ? sql`true` : eq(customers.agentId, me.agentId);
 
-  // agent role 은 자기 자신에게만 신규 할당 가능 — 엑셀 agentId 컬럼으로 다른 담당자에게
-  // 일괄 할당하는 경로를 차단. admin·manager 는 자유 재할당 가능.
+  // agent role ? ?먭린 ?먯떊?먭쾶留??좉퇋 ?좊떦 媛?????묒? agentId 而щ읆?쇰줈 ?ㅻⅨ ?대떦?먯뿉寃?
+  // ?쇨큵 ?좊떦?섎뒗 寃쎈줈瑜?李⑤떒. admin쨌manager ???먯쑀 ?ы븷??媛??
 
-  // preview: 기존 DB 고객 수 + 예상 매칭 시뮬레이션
+  // preview: 湲곗〈 DB 怨좉컼 ??+ ?덉긽 留ㅼ묶 ?쒕??덉씠??
   if (mode === "preview") {
     const [{ count: existingCount }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(customers)
       .where(scopeWhere);
 
-    // 매칭 시뮬레이션: DB 를 읽어서 엑셀 행마다 어떤 키로 매칭될지 카운트만 계산 (쓰기 없음)
+    // 留ㅼ묶 ?쒕??덉씠?? DB 瑜??쎌뼱???묒? ?됰쭏???대뼡 ?ㅻ줈 留ㅼ묶?좎? 移댁슫?몃쭔 怨꾩궛 (?곌린 ?놁쓬)
     const allExisting = await db
       .select({
         id: customers.id,
         customerCode: customers.customerCode,
         agentId: customers.agentId,
         name: customers.name,
+        birthDate: customers.birthDate,
         phone1: customers.phone1,
+        job: customers.job,
+        address: customers.address,
+        addressDetail: customers.addressDetail,
+        callResult: customers.callResult,
+        dbProduct: customers.dbProduct,
+        dbPremium: customers.dbPremium,
+        dbHandler: customers.dbHandler,
+        subCategory: customers.subCategory,
+        dbPolicyNo: customers.dbPolicyNo,
+        dbRegisteredAt: customers.dbRegisteredAt,
+        mainCategory: customers.mainCategory,
+        dbStartAt: customers.dbStartAt,
+        dbEndAt: customers.dbEndAt,
+        branch: customers.branch,
+        hq: customers.hq,
+        team: customers.team,
+        fax: customers.fax,
+        reservationReceived: customers.reservationReceived,
+        dbCompany: customers.dbCompany,
         rrnFrontHash: customers.rrnFrontHash,
+        rrnBackEnc: customers.rrnBackEnc,
         rrnBackHash: customers.rrnBackHash,
       })
       .from(customers)
@@ -237,36 +368,42 @@ export async function POST(req: NextRequest) {
     }
 
     let willUpdate = 0;
+    let unchangedCount = 0;
     let willInsert = 0;
     let matchedCode = 0;
     let matchedRrn = 0;
     let matchedNamePhone = 0;
     for (const row of parsed.rows) {
-      if (!row.customer.name || row.customer.name === "이름없음") continue;
+      if (!row.customer.name || row.customer.name === "?대쫫?놁쓬") continue;
       const c = row.customer;
-      // agent 는 자기 자신에게만 할당 가능 — 시뮬레이션에서도 동일하게 보정해 미리보기/실행 결과 일치.
+      // agent ???먭린 ?먯떊?먭쾶留??좊떦 媛?????쒕??덉씠?섏뿉?쒕룄 ?숈씪?섍쾶 蹂댁젙??誘몃━蹂닿린/?ㅽ뻾 寃곌낵 ?쇱튂.
       if (enforceSelfAssign && c.agentId && c.agentId !== me.agentId) {
         c.agentId = me.agentId;
       }
       const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
       const rrnBack = extractRrnBackRaw(row.raw);
+      let existing: ExistingCustomerMatch | undefined;
       if (c.customerCode && byCode.has(c.customerCode)) {
-        willUpdate++;
+        existing = byCode.get(c.customerCode);
         matchedCode++;
-      } else if (
-        rrnFront &&
-        rrnBack &&
-        byRrn.has(`${piiHash(rrnFront)}|${piiHash(rrnBack)}`)
-      ) {
-        willUpdate++;
-        matchedRrn++;
-      } else if (
-        c.name &&
-        c.phone1 &&
-        byNamePhone.has(`${c.name}|${normalizePhone(c.phone1)}`)
-      ) {
-        willUpdate++;
-        matchedNamePhone++;
+      } else if (rrnFront && rrnBack) {
+        const rrnKey = `${piiHash(rrnFront)}|${piiHash(rrnBack)}`;
+        if (byRrn.has(rrnKey)) {
+          existing = byRrn.get(rrnKey);
+          matchedRrn++;
+        }
+      } else if (c.name && c.phone1) {
+        const np = `${c.name}|${normalizePhone(c.phone1)}`;
+        if (byNamePhone.has(np)) {
+          existing = byNamePhone.get(np);
+          matchedNamePhone++;
+        }
+      }
+
+      if (existing) {
+        const patch = buildCustomerPatch(existing, c, rrnFront, rrnBack);
+        if (Object.keys(patch).length > 0) willUpdate++;
+        else unchangedCount++;
       } else {
         willInsert++;
       }
@@ -290,6 +427,7 @@ export async function POST(req: NextRequest) {
       unknownAgentCount,
       autoCreateAgentCount,
       willUpdate,
+      unchangedCount,
       willInsert,
       matchedCode,
       matchedRrn,
@@ -298,13 +436,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // apply — upsert 전략
-  //   1) 사전 로드: 고객코드 · 주민번호(앞+뒤) · 이름+전화1 세 가지 맵
-  //   2) 엑셀 각 행마다 우선순위로 매칭
-  //      code → rrn → namePhone → INSERT
-  //   3) UPDATE 시 빈 값(null) 은 patch 에서 제외 → 엑셀 빈 셀 = 기존 값 보존
-  //      memo / reservationAt / createdAt 은 엑셀에 없는 웹 전용 필드이므로 무조건 건드리지 않음
-  //   4) 전체 트랜잭션으로 감싸 일관성 유지. 중간 실패 시 모두 롤백.
+  // apply ??upsert ?꾨왂
+  //   1) ?ъ쟾 濡쒕뱶: 怨좉컼肄붾뱶 쨌 二쇰?踰덊샇(???? 쨌 ?대쫫+?꾪솕1 ??媛吏 留?
+  //   2) ?묒? 媛??됰쭏???곗꽑?쒖쐞濡?留ㅼ묶
+  //      code ??rrn ??namePhone ??INSERT
+  //   3) UPDATE ??鍮?媛?null) ? patch ?먯꽌 ?쒖쇅 ???묒? 鍮?? = 湲곗〈 媛?蹂댁〈
+  //      memo / reservationAt / createdAt ? ?묒????녿뒗 ???꾩슜 ?꾨뱶?대?濡?臾댁“嫄?嫄대뱶由ъ? ?딆쓬
+  //   4) ?꾩껜 ?몃옖??뀡?쇰줈 媛먯떥 ?쇨????좎?. 以묎컙 ?ㅽ뙣 ??紐⑤몢 濡ㅻ갚.
   let updated = 0;
   let unchanged = 0;
   let inserted = 0;
@@ -368,19 +506,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // RBAC 스코프 적용 — agent 는 본인 담당분만 매칭 가능. (preview 와 동일 로직)
-      const allExisting = await tx
-        .select({
-          id: customers.id,
-          customerCode: customers.customerCode,
-          agentId: customers.agentId,
-          name: customers.name,
-          phone1: customers.phone1,
-          rrnFrontHash: customers.rrnFrontHash,
-          rrnBackHash: customers.rrnBackHash,
-        })
-        .from(customers)
-        .where(scopeWhere);
+      // RBAC ?ㅼ퐫???곸슜 ??agent ??蹂몄씤 ?대떦遺꾨쭔 留ㅼ묶 媛?? (preview ? ?숈씪 濡쒖쭅)
+    const allExisting = await tx
+      .select({
+        id: customers.id,
+        customerCode: customers.customerCode,
+        agentId: customers.agentId,
+        name: customers.name,
+        birthDate: customers.birthDate,
+        phone1: customers.phone1,
+        job: customers.job,
+        address: customers.address,
+        addressDetail: customers.addressDetail,
+        callResult: customers.callResult,
+        dbProduct: customers.dbProduct,
+        dbPremium: customers.dbPremium,
+        dbHandler: customers.dbHandler,
+        subCategory: customers.subCategory,
+        dbPolicyNo: customers.dbPolicyNo,
+        dbRegisteredAt: customers.dbRegisteredAt,
+        mainCategory: customers.mainCategory,
+        dbStartAt: customers.dbStartAt,
+        dbEndAt: customers.dbEndAt,
+        branch: customers.branch,
+        hq: customers.hq,
+        team: customers.team,
+        fax: customers.fax,
+        reservationReceived: customers.reservationReceived,
+        dbCompany: customers.dbCompany,
+        rrnFrontHash: customers.rrnFrontHash,
+        rrnBackEnc: customers.rrnBackEnc,
+        rrnBackHash: customers.rrnBackHash,
+      })
+      .from(customers)
+      .where(scopeWhere);
       existingTotal = allExisting.length;
 
       const byCode = new Map<string, ExistingCustomerMatch>();
@@ -398,26 +557,26 @@ export async function POST(req: NextRequest) {
       }
 
       for (const row of parsed.rows) {
-        if (!row.customer.name || row.customer.name === "이름없음") {
+        if (!row.customer.name || row.customer.name === "?대쫫?놁쓬") {
           skipped++;
           continue;
         }
 
         const c = { ...row.customer };
         if (c.agentId && !validAgentIds.has(c.agentId)) c.agentId = null;
-        // agent 는 본인 외 다른 담당자에게 신규 할당 불가 — 강제로 본인으로 보정.
+        // agent ??蹂몄씤 ???ㅻⅨ ?대떦?먯뿉寃??좉퇋 ?좊떦 遺덇? ??媛뺤젣濡?蹂몄씤?쇰줈 蹂댁젙.
         if (enforceSelfAssign && c.agentId && c.agentId !== me.agentId) {
           c.agentId = me.agentId;
         }
         if (enforceSelfAssign && !c.agentId) {
-          // agentId 미지정 신규 등록은 actor 본인 소유로 (무주공 데이터 방지).
+          // agentId 誘몄????좉퇋 ?깅줉? actor 蹂몄씤 ?뚯쑀濡?(臾댁＜怨??곗씠??諛⑹?).
           c.agentId = me.agentId;
         }
 
         const rrnBack = extractRrnBackRaw(row.raw);
         const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
 
-        // --- 매칭 ---
+        // --- 留ㅼ묶 ---
         let existing: ExistingCustomerMatch | undefined;
         if (c.customerCode && byCode.has(c.customerCode)) {
           existing = byCode.get(c.customerCode);
@@ -437,54 +596,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (existing) {
-          // --- UPDATE: 빈 값은 제외 (기존 값 보존).
-          // memo, reservationAt, createdAt 은 엑셀에 없으므로 건드리지 않음.
-          const patch: Partial<NewCustomer> = {};
-          const setIf = <K extends keyof NewCustomer>(
-            key: K,
-            value: NewCustomer[K] | null | undefined,
-          ) => {
-            if (value !== null && value !== undefined) {
-              patch[key] = value as NewCustomer[K];
-            }
-          };
-          setIf("customerCode", c.customerCode);
-          setIf("agentId", c.agentId);
-          setIf("name", c.name);
-          setIf("birthDate", c.birthDate);
-          setIf("phone1", c.phone1);
-          setIf("job", c.job);
-          setIf("address", c.address);
-          setIf("addressDetail", c.addressDetail);
-          setIf("callResult", c.callResult);
-          setIf("dbProduct", c.dbProduct);
-          setIf("dbPremium", c.dbPremium);
-          setIf("dbHandler", c.dbHandler);
-          setIf("subCategory", c.subCategory);
-          setIf("dbPolicyNo", c.dbPolicyNo);
-          setIf("dbRegisteredAt", c.dbRegisteredAt);
-          setIf("mainCategory", c.mainCategory);
-          setIf("dbStartAt", c.dbStartAt);
-          setIf("dbEndAt", c.dbEndAt);
-          setIf("branch", c.branch);
-          setIf("hq", c.hq);
-          setIf("team", c.team);
-          setIf("fax", c.fax);
-          setIf("reservationReceived", c.reservationReceived);
-          setIf("dbCompany", c.dbCompany);
-          if (rrnBack && rrnFront) {
-            Object.assign(
-              patch,
-              encodeRrnFields({
-                rrnFront,
-                rrnBack,
-              }),
-            );
-          } else if (rrnFront) {
-            Object.assign(patch, encodeRrnFrontFields(rrnFront));
-          } else if (rrnBack) {
-            Object.assign(patch, encodeRrnBackFields(rrnBack));
-          }
+          const patch = buildCustomerPatch(existing, c, rrnFront, rrnBack);
 
           if (Object.keys(patch).length > 0) {
             patch.updatedAt = new Date();
@@ -494,7 +606,7 @@ export async function POST(req: NextRequest) {
             unchanged++;
           }
         } else {
-          // --- INSERT (신규)
+          // --- INSERT (?좉퇋)
           const excelCreatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.createdAtRaw]);
           const excelUpdatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.updatedAtRaw]);
 
@@ -531,7 +643,7 @@ export async function POST(req: NextRequest) {
 
           pendingInserts.push(insertValues);
 
-          // 같은 엑셀 안에 동일 식별자 가진 행이 또 나올 수 있으니 맵 업데이트 → 두 번째 행부터 UPDATE 로 빠짐
+          // 媛숈? ?묒? ?덉뿉 ?숈씪 ?앸퀎??媛吏??됱씠 ???섏삱 ???덉쑝??留??낅뜲?댄듃 ????踰덉㎏ ?됰???UPDATE 濡?鍮좎쭚
         }
       }
 
@@ -545,23 +657,23 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (e) {
-    // 클라이언트에는 generic 메시지만 노출 — DB 스키마/내부 경로 leak 방지.
-    // 운영 디버깅은 서버 로그에서.
+    // ?대씪?댁뼵?몄뿉??generic 硫붿떆吏留??몄텧 ??DB ?ㅽ궎留??대? 寃쎈줈 leak 諛⑹?.
+    // ?댁쁺 ?붾쾭源낆? ?쒕쾭 濡쒓렇?먯꽌.
     console.error("[import] upsert transaction failed:", e);
     return jsonNoStore(
       {
         ok: false,
-        error: "업로드 중 오류가 발생했습니다. 엑셀 형식을 확인하고 다시 시도하세요.",
+        error: "?낅줈??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?묒? ?뺤떇???뺤씤?섍퀬 ?ㅼ떆 ?쒕룄?섏꽭??",
       },
       { status: 500 },
     );
   }
 
-  // 엑셀에 매칭 안 된 기존 고객 = 그대로 유지됨
+  // ?묒???留ㅼ묶 ????湲곗〈 怨좉컼 = 洹몃?濡??좎???
   const untouched = existingTotal - (updated + unchanged);
 
-  // 대량 변경 추적 — 행별 diff 가 아닌 요약을 단일 audit row 로 남김 (감사 부담 최소화).
-  // customerId 는 일괄성 동작이라 NULL.
+  // ???蹂寃?異붿쟻 ???됰퀎 diff 媛 ?꾨땶 ?붿빟???⑥씪 audit row 濡??④? (媛먯궗 遺??理쒖냼??.
+  // customerId ???쇨큵???숈옉?대씪 NULL.
   if (updated > 0 || inserted > 0) {
     try {
       await db.insert(auditLogs).values({
@@ -605,3 +717,4 @@ export async function POST(req: NextRequest) {
     createdAgentCount,
   });
 }
+

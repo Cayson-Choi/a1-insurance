@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EXCEL_HEADERS } from "@/lib/excel/column-map";
 
 const BATCH_ROW_LIMIT = 20_000;
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -34,6 +35,7 @@ type PreviewResult = {
   unknownAgentCount: number;
   autoCreateAgentCount: number;
   willUpdate: number;
+  unchangedCount: number;
   willInsert: number;
   matchedCode: number;
   matchedRrn: number;
@@ -67,6 +69,11 @@ type UploadChunk = {
   totalChunks: number;
 };
 
+type SplitWorkbookResult = {
+  chunks: UploadChunk[];
+  missingAgentIds: string[];
+};
+
 type UploadOutcome =
   | { ok: true; payload: PreviewResult | ApplyResult }
   | { ok: false; error: string; headerErrors?: string[] };
@@ -77,7 +84,16 @@ async function loadExcelJs(): Promise<ExcelJSImport> {
   return import("exceljs");
 }
 
-async function splitWorkbookFile(file: File): Promise<UploadChunk[]> {
+function normalizeAgentId(agentId: unknown): string {
+  return typeof agentId === "string" || typeof agentId === "number"
+    ? String(agentId).trim()
+    : "";
+}
+
+async function splitWorkbookFile(
+  file: File,
+  knownAgentIds: ReadonlySet<string>,
+): Promise<SplitWorkbookResult> {
   const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
@@ -86,9 +102,11 @@ async function splitWorkbookFile(file: File): Promise<UploadChunk[]> {
 
   const rows: unknown[][] = [];
   let headerValues: unknown[] | null = null;
+  let agentIdColumn = -1;
   sheet.eachRow({ includeEmpty: false }, (row: import("exceljs").Row, rowNumber: number) => {
     if (rowNumber === 1) {
       headerValues = [...(row.values as unknown[])];
+      agentIdColumn = headerValues.findIndex((value) => value === EXCEL_HEADERS.agentId);
       return;
     }
     rows.push([...((row.values as unknown[]) ?? [])]);
@@ -98,6 +116,16 @@ async function splitWorkbookFile(file: File): Promise<UploadChunk[]> {
 
   const totalChunks = Math.max(1, Math.ceil(rows.length / BATCH_ROW_LIMIT));
   const chunks: UploadChunk[] = [];
+  const missingAgentIds = new Set<string>();
+
+  if (agentIdColumn > 0) {
+    for (const values of rows) {
+      const agentId = normalizeAgentId(values[agentIdColumn]);
+      if (agentId && !knownAgentIds.has(agentId)) {
+        missingAgentIds.add(agentId);
+      }
+    }
+  }
 
   for (let i = 0; i < totalChunks; i++) {
     const start = i * BATCH_ROW_LIMIT;
@@ -123,7 +151,7 @@ async function splitWorkbookFile(file: File): Promise<UploadChunk[]> {
     });
   }
 
-  return chunks;
+  return { chunks, missingAgentIds: [...missingAgentIds] };
 }
 
 async function uploadChunk(
@@ -152,6 +180,7 @@ function createPreviewAggregate(): PreviewResult {
     unknownAgentCount: 0,
     autoCreateAgentCount: 0,
     willUpdate: 0,
+    unchangedCount: 0,
     willInsert: 0,
     matchedCode: 0,
     matchedRrn: 0,
@@ -167,6 +196,7 @@ function mergePreviewAggregate(target: PreviewResult, part: PreviewResult): Prev
   target.unknownAgentCount += part.unknownAgentCount;
   target.autoCreateAgentCount += part.autoCreateAgentCount;
   target.willUpdate += part.willUpdate;
+  target.unchangedCount += part.unchangedCount;
   target.willInsert += part.willInsert;
   target.matchedCode += part.matchedCode;
   target.matchedRrn += part.matchedRrn;
@@ -226,6 +256,7 @@ function createEmptyPreview(headerErrors: string[], errorMessage: string): Previ
     unknownAgentCount: 0,
     autoCreateAgentCount: 0,
     willUpdate: 0,
+    unchangedCount: 0,
     willInsert: 0,
     matchedCode: 0,
     matchedRrn: 0,
@@ -235,7 +266,11 @@ function createEmptyPreview(headerErrors: string[], errorMessage: string): Previ
   };
 }
 
-export function ExcelUploader() {
+export function ExcelUploader({
+  knownAgentIds,
+}: {
+  knownAgentIds: readonly string[];
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -246,7 +281,10 @@ export function ExcelUploader() {
 
   async function requestChunked(targetMode: "preview" | "apply") {
     if (!file) return;
-    const chunks = await splitWorkbookFile(file);
+    const { chunks, missingAgentIds } = await splitWorkbookFile(
+      file,
+      new Set(knownAgentIds),
+    );
     if (targetMode === "preview") {
       const aggregate = createPreviewAggregate();
       for (const chunk of chunks) {
@@ -260,6 +298,7 @@ export function ExcelUploader() {
         }
         mergePreviewAggregate(aggregate, result.payload as PreviewResult);
       }
+      aggregate.autoCreateAgentCount = missingAgentIds.length;
       setPreview(aggregate);
       toast.success(`미리보기 완료 (${aggregate.total.toLocaleString("ko-KR")}건)`);
       return;
@@ -274,9 +313,10 @@ export function ExcelUploader() {
       }
       mergeApplyAggregate(aggregate, result.payload as ApplyResult);
     }
+    aggregate.createdAgentCount = missingAgentIds.length;
 
     toast.success(
-      `업로드 완료: 업데이트 ${aggregate.updated}건 · 신규 ${aggregate.inserted}건 · 담당자 생성 ${aggregate.createdAgentCount}명 · 기존 유지 ${aggregate.untouched}건`,
+      `업로드 완료: 신규등록 ${aggregate.inserted}건 · 기존 고객 업데이트 ${aggregate.updated}건 · 기존 고객데이터 변경없음 ${aggregate.unchanged}건 · 담당자 생성 ${aggregate.createdAgentCount}명`,
       { duration: 6000 },
     );
     setPreview(null);
@@ -293,44 +333,6 @@ export function ExcelUploader() {
     try {
       setMode(targetMode);
       await requestChunked(targetMode);
-      return;
-    } catch (e) {
-      console.error(e);
-      toast.error("?ㅽ듃?뚰겕 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
-    } finally {
-      setMode("idle");
-      setConfirmOpen(false);
-    }
-    const fd = new FormData();
-    fd.append("file", file as File);
-    try {
-      const res = await fetch(`/api/customers/import?mode=${targetMode}`, {
-        method: "POST",
-        body: fd,
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error ?? "업로드 실패");
-        if (json.headerErrors) setPreview({ ...json, ok: false, previewSample: [] });
-        return;
-      }
-      if (targetMode === "preview") {
-        setPreview(json as PreviewResult);
-        toast.success(`미리보기 완료 (${json.total}건)`);
-      } else {
-        const r = json as ApplyResult;
-        toast.success(
-          `업로드 완료: 업데이트 ${r.updated}건 · 신규 ${r.inserted}건 · 담당자 생성 ${r.createdAgentCount ?? 0}명 · 기존 유지 ${r.untouched}건`,
-          { duration: 6000 },
-        );
-        setPreview(null);
-        setFile(null);
-        const input = inputRef.current;
-        if (input) {
-          input!.value = "";
-        }
-        startTransition(() => router.refresh());
-      }
     } catch (e) {
       console.error(e);
       toast.error("네트워크 오류가 발생했습니다.");
@@ -423,16 +425,9 @@ export function ExcelUploader() {
           <div className="flex flex-wrap gap-4 text-sm">
             <Stat label="기존 DB" value={preview.existingCount} />
             <Stat label="엑셀" value={preview.total} />
-            <Stat
-              label="업데이트 예정"
-              value={preview.willUpdate}
-              tone="accent"
-            />
-            <Stat label="신규 예정" value={preview.willInsert} tone="accent" />
-            <Stat
-              label="기존 유지 예정"
-              value={Math.max(0, preview.existingCount - preview.willUpdate)}
-            />
+            <Stat label="기존 고객 업데이트 예정" value={preview.willUpdate} tone="accent" />
+            <Stat label="기존 고객 변경없음 예정" value={preview.unchangedCount} />
+            <Stat label="신규등록 예정" value={preview.willInsert} tone="accent" />
             <Stat
               label="오류 행"
               value={preview.invalidCount}
@@ -521,20 +516,17 @@ export function ExcelUploader() {
                   엑셀: <b>{preview?.total?.toLocaleString("ko-KR") ?? "-"}</b>건
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  예상 결과 → 업데이트{" "}
+                  예상 결과 → 기존 고객 업데이트{" "}
                   <b className="text-brand-accent">
                     {preview?.willUpdate?.toLocaleString("ko-KR") ?? "-"}
                   </b>
-                  건 · 신규{" "}
+                  건 · 기존 고객데이터 변경없음{" "}
+                  <b className="text-brand-accent">
+                    {preview?.unchangedCount?.toLocaleString("ko-KR") ?? "-"}
+                  </b>
+                  건 · 신규등록{" "}
                   <b className="text-brand-accent">
                     {preview?.willInsert?.toLocaleString("ko-KR") ?? "-"}
-                  </b>
-                  건 · 기존 유지{" "}
-                  <b>
-                    {(preview
-                      ? Math.max(0, preview.existingCount - preview.willUpdate)
-                      : 0
-                    ).toLocaleString("ko-KR")}
                   </b>
                   건
                 </div>
