@@ -99,8 +99,9 @@ export const customers = pgTable(
       .references(() => users.agentId, { onDelete: "set null" }),
     name: varchar("name", { length: 60 }).notNull(),
     birthDate: date("birth_date"),
-    rrnFront: varchar("rrn_front", { length: 6 }),
-    rrnBack: varchar("rrn_back", { length: 7 }),
+    rrnFrontHash: varchar("rrn_front_hash", { length: 64 }),
+    rrnBackEnc: text("rrn_back_enc"),
+    rrnBackHash: varchar("rrn_back_hash", { length: 64 }),
     phone1: varchar("phone1", { length: 30 }),
     job: text("job"),
     address: text("address"),
@@ -131,8 +132,8 @@ export const customers = pgTable(
   (t) => [
     index("customers_agent_id_idx").on(t.agentId),
     index("customers_name_idx").on(t.name),
-    index("customers_rrn_front_idx").on(t.rrnFront),
-    index("customers_rrn_back_idx").on(t.rrnBack),
+    index("customers_rrn_front_hash_idx").on(t.rrnFrontHash),
+    index("customers_rrn_back_hash_idx").on(t.rrnBackHash),
     index("customers_db_registered_idx").on(t.dbRegisteredAt),
     index("customers_call_result_idx").on(t.callResult),
     // buildOrderBy 가 모든 정렬 케이스에서 desc(createdAt) 을 tie-breaker 로 추가하므로 index 필요.

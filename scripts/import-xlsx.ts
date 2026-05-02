@@ -10,6 +10,7 @@ import {
   extractRrnBackRaw,
   birthDateToFrontYymmdd,
 } from "@/lib/excel/column-map";
+import { encodeRrnFields } from "@/lib/security/pii";
 import { and, eq, isNull } from "drizzle-orm";
 
 config({ path: ".env.local" });
@@ -76,17 +77,11 @@ async function main() {
       customer.agentId = null;
     }
 
-    // 주민번호 평문 저장
     const back = extractRrnBackRaw(raw);
-    if (back) {
-      customer.rrnBack = back;
-      rrnBackCount++;
-    }
     const front = birthDateToFrontYymmdd(customer.birthDate ?? null);
-    if (front) {
-      customer.rrnFront = front;
-      rrnFrontCount++;
-    }
+    Object.assign(customer, encodeRrnFields({ rrnFront: front, rrnBack: back }));
+    if (back) rrnBackCount++;
+    if (front) rrnFrontCount++;
 
     if (customer.customerCode) {
       const existing = await db.query.customers.findFirst({

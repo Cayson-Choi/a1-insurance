@@ -303,13 +303,15 @@ export function DetailForm({
   }
 
   // handler refs — 전역 keydown 핸들러가 마운트 시점 함수를 capture 한 채 stale 해지지 않게.
-  // render 중 직접 할당이 effect 보다 안전 (effect 는 한 프레임 지연되어 그 사이 keydown 발생 시 stale).
   const closeRef = useRef(close);
   const goPrevRef = useRef(goPrev);
   const goNextRef = useRef(goNext);
-  closeRef.current = close;
-  goPrevRef.current = goPrev;
-  goNextRef.current = goNext;
+
+  useEffect(() => {
+    closeRef.current = close;
+    goPrevRef.current = goPrev;
+    goNextRef.current = goNext;
+  });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

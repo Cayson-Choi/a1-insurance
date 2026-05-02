@@ -85,6 +85,20 @@
       "when": 1777400000000,
       "tag": "0011_audit_user_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777500000000,
+      "tag": "0012_reencrypt_rrn",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777600000000,
+      "tag": "0013_drop_plaintext_rrn",
+      "breakpoints": true
     }
   ]
 }

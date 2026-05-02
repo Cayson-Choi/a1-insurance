@@ -5,6 +5,7 @@ import { customers, users } from "@/lib/db/schema";
 import { requireUser, getPermissions } from "@/lib/auth/rbac";
 import { parseFilter, buildWhere } from "@/lib/customers/queries";
 import { buildCustomersWorkbook, type ExportRow } from "@/lib/excel/exporter";
+import { getStoredRrnBack } from "@/lib/security/pii";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -41,6 +42,8 @@ export async function GET(req: NextRequest) {
 
   const exportRows: ExportRow[] = rows.map((r) => ({
     ...r.customer,
+    rrnFront: null,
+    rrnBack: getStoredRrnBack(r.customer),
     agentName: r.agentName,
   }));
 

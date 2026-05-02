@@ -6,8 +6,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/rbac";
 import { getCustomerDetail, getDetailContext } from "@/lib/customers/get-detail";
+import { isUuid } from "@/lib/security/ids";
 
 export const runtime = "nodejs";
+
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const res = NextResponse.json(body, init);
+  res.headers.set("Cache-Control", "no-store, max-age=0");
+  return res;
+}
 
 export async function GET(
   req: NextRequest,
@@ -15,6 +22,13 @@ export async function GET(
 ) {
   const user = await requireUser();
   const { id } = await params;
+  if (!isUuid(id)) {
+    return jsonNoStore(
+      { ok: false, error: "Customer not found." },
+      { status: 404 },
+    );
+  }
+
   const sp: Record<string, string> = {};
   req.nextUrl.searchParams.forEach((v, k) => {
     sp[k] = v;
@@ -25,10 +39,10 @@ export async function GET(
     getDetailContext(id, sp, user),
   ]);
   if (!customer) {
-    return NextResponse.json(
+    return jsonNoStore(
       { ok: false, error: "고객을 찾을 수 없습니다." },
       { status: 404 },
     );
   }
-  return NextResponse.json({ ok: true, customer, context });
+  return jsonNoStore({ ok: true, customer, context });
 }

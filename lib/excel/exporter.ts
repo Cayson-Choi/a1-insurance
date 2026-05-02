@@ -33,7 +33,14 @@ const HEADER_ORDER: Array<[keyof typeof EXCEL_HEADERS, number]> = [
   ["agentId", 10],
 ];
 
-export type ExportRow = Customer & { agentName: string | null };
+export type ExportRow = Omit<
+  Customer,
+  "rrnFrontHash" | "rrnBackHash" | "rrnBackEnc"
+> & {
+  rrnFront: null;
+  rrnBack: string | null;
+  agentName: string | null;
+};
 
 function toDateStr(v: Date | string | null): string {
   if (!v) return "";
@@ -61,6 +68,13 @@ function toDateTimeStr(v: Date | string | null | undefined): string {
   const mi = String(kst.getUTCMinutes()).padStart(2, "0");
   const ss = String(kst.getUTCSeconds()).padStart(2, "0");
   return `${y}-${mo}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+function excelText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  const first = text.trimStart()[0];
+  return first && /^[=+\-@]/.test(first) ? `'${text}` : text;
 }
 
 export async function buildCustomersWorkbook(
@@ -92,36 +106,36 @@ export async function buildCustomersWorkbook(
 
   for (const r of rows) {
     ws.addRow({
-      customerCode: r.customerCode ?? "",
-      agentName: r.agentName ?? "",
-      name: r.name,
+      customerCode: excelText(r.customerCode),
+      agentName: excelText(r.agentName),
+      name: excelText(r.name),
       birthDate: toDateStr(r.birthDate),
       // 원본 엑셀 포맷: "주민No" 컬럼은 뒤 7자리만. 앞자리(YYMMDD)는 생년월일 컬럼에서 파생.
       // 이 규칙을 유지해야 export → import 왕복 시 주민번호가 소실되지 않음.
-      rrnFrontRaw: r.rrnBack ?? "",
-      phone1: r.phone1 ?? "",
-      job: r.job ?? "",
-      address: r.address ?? "",
-      callResult: r.callResult ?? "",
-      dbProduct: r.dbProduct ?? "",
+      rrnFrontRaw: excelText(r.rrnBack),
+      phone1: excelText(r.phone1),
+      job: excelText(r.job),
+      address: excelText(r.address),
+      callResult: excelText(r.callResult),
+      dbProduct: excelText(r.dbProduct),
       dbPremium: r.dbPremium ? Number(r.dbPremium) : "",
-      dbHandler: r.dbHandler ?? "",
-      subCategory: r.subCategory ?? "",
-      dbPolicyNo: r.dbPolicyNo ?? "",
+      dbHandler: excelText(r.dbHandler),
+      subCategory: excelText(r.subCategory),
+      dbPolicyNo: excelText(r.dbPolicyNo),
       dbRegisteredAt: toDateStr(r.dbRegisteredAt),
-      mainCategory: r.mainCategory ?? "",
+      mainCategory: excelText(r.mainCategory),
       dbStartAt: toDateStr(r.dbStartAt),
-      branch: r.branch ?? "",
-      hq: r.hq ?? "",
-      team: r.team ?? "",
-      fax: r.fax ?? "",
+      branch: excelText(r.branch),
+      hq: excelText(r.hq),
+      team: excelText(r.team),
+      fax: excelText(r.fax),
       reservationReceived: toDateStr(r.reservationReceived),
       createdAtRaw: toDateTimeStr(r.createdAt),
       updatedAtRaw: toDateTimeStr(r.updatedAt),
-      dbCompany: r.dbCompany ?? "",
-      addressDetail: r.addressDetail ?? "",
+      dbCompany: excelText(r.dbCompany),
+      addressDetail: excelText(r.addressDetail),
       dbEndAt: toDateStr(r.dbEndAt),
-      agentId: r.agentId ?? "",
+      agentId: excelText(r.agentId),
     });
   }
 

@@ -16,10 +16,19 @@ import {
   parseDateTimeCell,
 } from "@/lib/excel/column-map";
 import type { NewCustomer, Customer } from "@/lib/db/schema";
+import {
+  encodeRrnBackFields,
+  encodeRrnFields,
+  encodeRrnFrontFields,
+  getStoredRrnBackHash,
+  getStoredRrnFrontHash,
+  piiHash,
+} from "@/lib/security/pii";
 
 // 엑셀 1회 처리 상한 — 메모리 폭주(zip-bomb 변형)·UI 멈춤 방지.
 // 운영 데이터 규모(~수만 건) 고려 50,000 행이면 충분.
 const MAX_IMPORT_ROWS = 50_000;
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,11 +41,22 @@ function normalizePhone(p: string | null | undefined): string {
   return p.replace(/\D/g, "");
 }
 
+function isXlsxBuffer(buf: ArrayBuffer): boolean {
+  const sig = new Uint8Array(buf.slice(0, 4));
+  return sig[0] === 0x50 && sig[1] === 0x4b && sig[2] === 0x03 && sig[3] === 0x04;
+}
+
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const res = NextResponse.json(body, init);
+  res.headers.set("Cache-Control", "no-store, max-age=0");
+  return res;
+}
+
 export async function POST(req: NextRequest) {
   const me = await requireUser();
   const perms = await getPermissions(me.agentId);
   if (!perms?.canCreate) {
-    return NextResponse.json(
+    return jsonNoStore(
       { error: "신규 등록(엑셀 업로드) 권한이 없습니다. 관리자에게 문의하세요." },
       { status: 403 },
     );
@@ -44,16 +64,16 @@ export async function POST(req: NextRequest) {
 
   const mode = req.nextUrl.searchParams.get("mode") ?? "preview";
   if (mode !== "preview" && mode !== "apply") {
-    return NextResponse.json({ error: "mode must be preview or apply" }, { status: 400 });
+    return jsonNoStore({ error: "mode must be preview or apply" }, { status: 400 });
   }
 
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "파일이 첨부되지 않았습니다." }, { status: 400 });
+    return jsonNoStore({ error: "파일이 첨부되지 않았습니다." }, { status: 400 });
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "10MB 이하 파일만 업로드 가능합니다." }, { status: 400 });
+  if (file.size > MAX_IMPORT_BYTES) {
+    return jsonNoStore({ error: "10MB 이하 파일만 업로드 가능합니다." }, { status: 400 });
   }
   // 확장자 우선 검증 + MIME 보조 검증.
   // 일부 브라우저는 빈 문자열이나 application/octet-stream 을 보내므로 MIME 만으로는 막을 수 없고,
@@ -65,19 +85,35 @@ export async function POST(req: NextRequest) {
     "",
   ]);
   const lowerName = file.name.toLowerCase();
-  const hasXlsxExt = lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
+  const hasXlsxExt = lowerName.endsWith(".xlsx");
   if (!hasXlsxExt || !ALLOWED_MIMES.has(file.type)) {
-    return NextResponse.json(
-      { error: "엑셀 파일(.xlsx 또는 .xls)만 업로드 가능합니다." },
+    return jsonNoStore(
+      { error: "엑셀 파일(.xlsx)만 업로드 가능합니다." },
       { status: 400 },
     );
   }
 
   const buf = await file.arrayBuffer();
-  const parsed = await parseCustomersWorkbook(buf);
+  if (!isXlsxBuffer(buf)) {
+    return jsonNoStore(
+      { error: "유효한 .xlsx 파일이 아닙니다." },
+      { status: 400 },
+    );
+  }
+
+  let parsed: Awaited<ReturnType<typeof parseCustomersWorkbook>>;
+  try {
+    parsed = await parseCustomersWorkbook(buf);
+  } catch (e) {
+    console.warn("[import] workbook parse failed:", e);
+    return jsonNoStore(
+      { error: "엑셀 파일을 읽을 수 없습니다. 파일 형식을 확인해주세요." },
+      { status: 400 },
+    );
+  }
 
   if (parsed.total > MAX_IMPORT_ROWS) {
-    return NextResponse.json(
+    return jsonNoStore(
       {
         error: `한 번에 업로드 가능한 행은 최대 ${MAX_IMPORT_ROWS.toLocaleString()}건입니다. 파일을 분할해 주세요.`,
       },
@@ -86,7 +122,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (parsed.headerErrors.length) {
-    return NextResponse.json(
+    return jsonNoStore(
       {
         ok: false,
         headerErrors: parsed.headerErrors,
@@ -135,7 +171,9 @@ export async function POST(req: NextRequest) {
     const byNamePhone = new Map<string, Customer>();
     for (const c of allExisting) {
       if (c.customerCode) byCode.set(c.customerCode, c);
-      if (c.rrnFront && c.rrnBack) byRrn.set(`${c.rrnFront}|${c.rrnBack}`, c);
+      const frontHash = getStoredRrnFrontHash(c);
+      const backHash = getStoredRrnBackHash(c);
+      if (frontHash && backHash) byRrn.set(`${frontHash}|${backHash}`, c);
       if (c.name && c.phone1) {
         byNamePhone.set(`${c.name}|${normalizePhone(c.phone1)}`, c);
       }
@@ -158,7 +196,11 @@ export async function POST(req: NextRequest) {
       if (c.customerCode && byCode.has(c.customerCode)) {
         willUpdate++;
         matchedCode++;
-      } else if (rrnFront && rrnBack && byRrn.has(`${rrnFront}|${rrnBack}`)) {
+      } else if (
+        rrnFront &&
+        rrnBack &&
+        byRrn.has(`${piiHash(rrnFront)}|${piiHash(rrnBack)}`)
+      ) {
         willUpdate++;
         matchedRrn++;
       } else if (
@@ -183,7 +225,7 @@ export async function POST(req: NextRequest) {
       errors: r.errors,
     }));
 
-    return NextResponse.json({
+    return jsonNoStore({
       ok: true,
       total: parsed.total,
       existingCount,
@@ -225,7 +267,9 @@ export async function POST(req: NextRequest) {
       const byNamePhone = new Map<string, Customer>();
       for (const c of allExisting) {
         if (c.customerCode) byCode.set(c.customerCode, c);
-        if (c.rrnFront && c.rrnBack) byRrn.set(`${c.rrnFront}|${c.rrnBack}`, c);
+        const frontHash = getStoredRrnFrontHash(c);
+        const backHash = getStoredRrnBackHash(c);
+        if (frontHash && backHash) byRrn.set(`${frontHash}|${backHash}`, c);
         if (c.name && c.phone1) {
           byNamePhone.set(`${c.name}|${normalizePhone(c.phone1)}`, c);
         }
@@ -256,9 +300,12 @@ export async function POST(req: NextRequest) {
         if (c.customerCode && byCode.has(c.customerCode)) {
           existing = byCode.get(c.customerCode);
           matchedCode++;
-        } else if (rrnFront && rrnBack && byRrn.has(`${rrnFront}|${rrnBack}`)) {
-          existing = byRrn.get(`${rrnFront}|${rrnBack}`);
-          matchedRrn++;
+        } else if (rrnFront && rrnBack) {
+          const rrnKey = `${piiHash(rrnFront)}|${piiHash(rrnBack)}`;
+          if (byRrn.has(rrnKey)) {
+            existing = byRrn.get(rrnKey);
+            matchedRrn++;
+          }
         } else if (c.name && c.phone1) {
           const np = `${c.name}|${normalizePhone(c.phone1)}`;
           if (byNamePhone.has(np)) {
@@ -303,8 +350,19 @@ export async function POST(req: NextRequest) {
           setIf("fax", c.fax);
           setIf("reservationReceived", c.reservationReceived);
           setIf("dbCompany", c.dbCompany);
-          if (rrnBack) patch.rrnBack = rrnBack;
-          if (rrnFront) patch.rrnFront = rrnFront;
+          if (rrnBack && rrnFront) {
+            Object.assign(
+              patch,
+              encodeRrnFields({
+                rrnFront,
+                rrnBack,
+              }),
+            );
+          } else if (rrnFront) {
+            Object.assign(patch, encodeRrnFrontFields(rrnFront));
+          } else if (rrnBack) {
+            Object.assign(patch, encodeRrnBackFields(rrnBack));
+          }
 
           if (Object.keys(patch).length > 0) {
             patch.updatedAt = new Date();
@@ -318,6 +376,7 @@ export async function POST(req: NextRequest) {
           const excelCreatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.createdAtRaw]);
           const excelUpdatedAt = parseDateTimeCell(row.raw[EXCEL_HEADERS.updatedAtRaw]);
 
+          const rrnFields = encodeRrnFields({ rrnFront, rrnBack });
           const insertValues: NewCustomer = {
             customerCode: c.customerCode ?? null,
             agentId: c.agentId ?? null,
@@ -343,8 +402,7 @@ export async function POST(req: NextRequest) {
             fax: c.fax ?? null,
             reservationReceived: c.reservationReceived ?? null,
             dbCompany: c.dbCompany ?? null,
-            rrnFront: rrnFront ?? null,
-            rrnBack: rrnBack ?? null,
+            ...rrnFields,
             createdAt: excelCreatedAt ?? new Date(),
             updatedAt: excelUpdatedAt ?? new Date(),
           };
@@ -358,8 +416,10 @@ export async function POST(req: NextRequest) {
           // 같은 엑셀 안에 동일 식별자 가진 행이 또 나올 수 있으니 맵 업데이트 → 두 번째 행부터 UPDATE 로 빠짐
           if (created) {
             if (created.customerCode) byCode.set(created.customerCode, created);
-            if (created.rrnFront && created.rrnBack) {
-              byRrn.set(`${created.rrnFront}|${created.rrnBack}`, created);
+            const frontHash = getStoredRrnFrontHash(created);
+            const backHash = getStoredRrnBackHash(created);
+            if (frontHash && backHash) {
+              byRrn.set(`${frontHash}|${backHash}`, created);
             }
             if (created.name && created.phone1) {
               byNamePhone.set(
@@ -375,7 +435,7 @@ export async function POST(req: NextRequest) {
     // 클라이언트에는 generic 메시지만 노출 — DB 스키마/내부 경로 leak 방지.
     // 운영 디버깅은 서버 로그에서.
     console.error("[import] upsert transaction failed:", e);
-    return NextResponse.json(
+    return jsonNoStore(
       {
         ok: false,
         error: "업로드 중 오류가 발생했습니다. 엑셀 형식을 확인하고 다시 시도하세요.",
@@ -412,7 +472,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return jsonNoStore({
     ok: true,
     total: parsed.total,
     existingTotal,

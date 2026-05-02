@@ -1,13 +1,13 @@
 import type { NextConfig } from "next";
 
-// Content-Security-Policy: 우선 Report-Only 로 도입.
-// Next.js 16 hydration 인라인·Pretendard CDN·이미지(blob:) 까지 모두 허용해 위반 0 인지 운영에서 관찰한 뒤
-// 추후 별도 PR 에서 enforce 로 승격 + nonce 기반 strict-dynamic 으로 전환.
-// 리포트 수집은 추가 인프라가 필요해 일단 헤더만 두고, 브라우저 콘솔에서 위반을 잡는 형태.
-const CSP_REPORT_ONLY = [
+const isProd = process.env.NODE_ENV === "production";
+
+const CSP = [
   "default-src 'self'",
   // hydration·Tailwind JIT inline style 호환 위해 'unsafe-inline'. 추후 nonce 로 교체.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  isProd
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
   "font-src 'self' data: https://cdn.jsdelivr.net",
   // OG 이미지·html-to-image 캡처용 blob: 허용. 외부 이미지는 회사 CDN 만.
@@ -18,12 +18,13 @@ const CSP_REPORT_ONLY = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-].join("; ");
+  isProd ? "upgrade-insecure-requests" : "",
+].filter(Boolean).join("; ");
 
 const nextConfig: NextConfig = {
   // 프로덕션 빌드에서 console.log 류 제거 — error/warn 은 보존해 운영 디버깅 유지.
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production"
+    removeConsole: isProd
       ? { exclude: ["error", "warn"] }
       : false,
   },
@@ -47,7 +48,12 @@ const nextConfig: NextConfig = {
             value: "max-age=31536000; includeSubDomains",
           },
           { key: "X-DNS-Prefetch-Control", value: "off" },
-          { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
+          {
+            key: isProd
+              ? "Content-Security-Policy"
+              : "Content-Security-Policy-Report-Only",
+            value: CSP,
+          },
         ],
       },
     ];

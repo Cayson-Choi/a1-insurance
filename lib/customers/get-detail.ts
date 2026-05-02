@@ -8,8 +8,15 @@ import {
   buildWhere,
   type CustomerFilter,
 } from "@/lib/customers/queries";
+import { isUuid } from "@/lib/security/ids";
+import { getStoredRrnBack } from "@/lib/security/pii";
 
-export type CustomerDetail = Customer & {
+export type CustomerDetail = Omit<
+  Customer,
+  "rrnFrontHash" | "rrnBackHash" | "rrnBackEnc"
+> & {
+  rrnFront: null;
+  rrnBack: string | null;
   agentName: string | null;
 };
 
@@ -29,6 +36,8 @@ export async function getCustomerDetail(
   id: string,
   user: SessionUser,
 ): Promise<CustomerDetail | null> {
+  if (!isUuid(id)) return null;
+
   const rows = await db
     .select({
       customer: customers,
@@ -44,8 +53,14 @@ export async function getCustomerDetail(
   // admin·manager 는 모든 담당자의 고객 열람 가능, agent 는 본인 담당만.
   if (!canSeeAllCustomers(user) && row.customer.agentId !== user.agentId) return null;
 
+  const { rrnFrontHash, rrnBackHash, rrnBackEnc, ...customer } = row.customer;
+  void rrnFrontHash;
+  void rrnBackHash;
+
   return {
-    ...row.customer,
+    ...customer,
+    rrnFront: null,
+    rrnBack: getStoredRrnBack({ rrnBackEnc }),
     agentName: row.agentName,
   };
 }
@@ -56,6 +71,18 @@ export async function getDetailContext(
   user: SessionUser,
 ): Promise<DetailContext> {
   const filter = parseFilter(searchParams);
+  if (!isUuid(id)) {
+    return {
+      prevId: null,
+      nextId: null,
+      prevPage: filter.page,
+      nextPage: filter.page,
+      indexInPage: -1,
+      totalInPage: 0,
+      filter,
+    };
+  }
+
   const where = buildWhere(filter, user);
   const offset = (filter.page - 1) * filter.perPage;
 

@@ -13,6 +13,15 @@ import {
   canReassignAgent,
 } from "@/lib/auth/rbac";
 import { UpdateCustomerSchema } from "@/lib/customers/schema";
+import { isUuid, normalizeUuidList } from "@/lib/security/ids";
+import { redactAuditPayload } from "@/lib/security/audit";
+import {
+  encodeRrnBackFields,
+  encodeRrnFields,
+  getStoredRrnBack,
+} from "@/lib/security/pii";
+
+const MAX_BULK_CUSTOMERS = 500;
 
 type UpdateResult =
   | { ok: true }
@@ -22,6 +31,10 @@ export async function updateCustomerAction(
   id: string,
   formData: FormData,
 ): Promise<UpdateResult> {
+  if (!isUuid(id)) {
+    return { ok: false, error: "Invalid customer id." };
+  }
+
   const user = await requireUser();
   const perms = await getPermissions(user.agentId);
   const canFullEdit = !!perms?.canEdit;
@@ -97,14 +110,21 @@ export async function updateCustomerAction(
   if (canFullEdit) {
     // rrnFront 는 UI 에서 입력 필드 제거됨 → birthDate 가 제공되면 거기서 자동 파생.
     // 빈 birthDate 일 때 기존 rrnFront 를 지우지 않음 (엑셀 import 로만 채워진 케이스 보호).
-    if (data.rrnFront !== undefined) {
-      patch.rrnFront = data.rrnFront;
-    } else if (data.birthDate) {
+    let rrnFront = data.rrnFront;
+    if (rrnFront === undefined && data.birthDate) {
       const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data.birthDate);
-      if (m) patch.rrnFront = `${m[1].slice(2)}${m[2]}${m[3]}`;
+      if (m) rrnFront = `${m[1].slice(2)}${m[2]}${m[3]}`;
     }
-    if (data.rrnBack !== undefined) {
-      patch.rrnBack = data.rrnBack;
+    if (rrnFront !== undefined) {
+      Object.assign(
+        patch,
+        encodeRrnFields({
+          rrnFront,
+          rrnBack: data.rrnBack === undefined ? getStoredRrnBack(existing) : data.rrnBack,
+        }),
+      );
+    } else if (data.rrnBack !== undefined) {
+      Object.assign(patch, encodeRrnBackFields(data.rrnBack));
     }
   }
 
@@ -137,8 +157,8 @@ export async function updateCustomerAction(
     hq: existing.hq,
     team: existing.team,
     agentId: existing.agentId,
-    rrnFront: existing.rrnFront,
-    rrnBack: existing.rrnBack,
+    rrnFront: null,
+    rrnBack: getStoredRrnBack(existing),
   };
   const afterSnapshot = {
     ...beforeSnapshot,
@@ -163,8 +183,11 @@ export async function updateCustomerAction(
     hq: patch.hq ?? existing.hq,
     team: patch.team ?? existing.team,
     agentId: patch.agentId ?? existing.agentId,
-    rrnFront: patch.rrnFront ?? existing.rrnFront,
-    rrnBack: patch.rrnBack ?? existing.rrnBack,
+    rrnFront: null,
+    rrnBack:
+      patch.rrnBackEnc !== undefined
+        ? getStoredRrnBack(patch)
+        : getStoredRrnBack(existing),
   };
 
   // UPDATE 와 audit INSERT 를 한 트랜잭션으로 묶어 원자성 보장.
@@ -175,8 +198,8 @@ export async function updateCustomerAction(
       actorAgentId: user.agentId,
       customerId: id,
       action: agentChange ? "agent_change" : "edit",
-      before: beforeSnapshot,
-      after: afterSnapshot,
+      before: redactAuditPayload(beforeSnapshot),
+      after: redactAuditPayload(afterSnapshot),
     });
   });
 
@@ -189,6 +212,10 @@ export async function updateCustomerAction(
 type DeleteResult = { ok: true } | { ok: false; error: string };
 
 export async function deleteCustomerAction(id: string): Promise<DeleteResult> {
+  if (!isUuid(id)) {
+    return { ok: false, error: "Invalid customer id." };
+  }
+
   const user = await requireUser();
   const perms = await getPermissions(user.agentId);
   if (!perms?.canDelete) {
@@ -238,7 +265,10 @@ export async function bulkReassignAction(
 ): Promise<BulkResult> {
   // 담당자 일괄 재할당은 매니저의 기본 권한. admin 또는 manager 통과.
   const actor = await requireAdminOrManager();
-  if (!customerIds.length) return { ok: false, error: "선택된 고객이 없습니다." };
+  const validCustomerIds = normalizeUuidList(customerIds, MAX_BULK_CUSTOMERS);
+  if (!validCustomerIds) {
+    return { ok: false, error: "Invalid customer selection." };
+  }
 
   const newAgent: string | null = targetAgentId && targetAgentId.trim() ? targetAgentId.trim() : null;
 
@@ -252,7 +282,7 @@ export async function bulkReassignAction(
   const existing = await db
     .select({ id: customers.id, agentId: customers.agentId })
     .from(customers)
-    .where(inArray(customers.id, customerIds));
+    .where(inArray(customers.id, validCustomerIds));
 
   if (!existing.length) {
     return { ok: false, error: "대상 고객을 찾을 수 없습니다." };
@@ -263,7 +293,7 @@ export async function bulkReassignAction(
     await tx
       .update(customers)
       .set({ agentId: newAgent, updatedAt: new Date() })
-      .where(inArray(customers.id, customerIds));
+      .where(inArray(customers.id, validCustomerIds));
 
     await tx.insert(auditLogs).values(
       existing.map((c) => ({
@@ -291,7 +321,10 @@ export async function bulkUpdateDbRegisteredAtAction(
   newDate: string | null,
 ): Promise<BulkDateResult> {
   const actor = await requireAdmin();
-  if (!customerIds.length) return { ok: false, error: "선택된 고객이 없습니다." };
+  const validCustomerIds = normalizeUuidList(customerIds, MAX_BULK_CUSTOMERS);
+  if (!validCustomerIds) {
+    return { ok: false, error: "Invalid customer selection." };
+  }
 
   const normalized = newDate && newDate.trim() ? newDate.trim() : null;
   if (normalized !== null && !BULK_DATE_RE.test(normalized)) {
@@ -301,7 +334,7 @@ export async function bulkUpdateDbRegisteredAtAction(
   const existing = await db
     .select({ id: customers.id, dbRegisteredAt: customers.dbRegisteredAt })
     .from(customers)
-    .where(inArray(customers.id, customerIds));
+    .where(inArray(customers.id, validCustomerIds));
 
   if (!existing.length) {
     return { ok: false, error: "대상 고객을 찾을 수 없습니다." };
@@ -311,7 +344,7 @@ export async function bulkUpdateDbRegisteredAtAction(
     await tx
       .update(customers)
       .set({ dbRegisteredAt: normalized, updatedAt: new Date() })
-      .where(inArray(customers.id, customerIds));
+      .where(inArray(customers.id, validCustomerIds));
 
     await tx.insert(auditLogs).values(
       existing.map((c) => ({

@@ -4,6 +4,7 @@ import { customers, users } from "@/lib/db/schema";
 import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
 import { isSortDir, isSortKey, type SortDir, type SortKey } from "@/lib/customers/columns";
+import { getStoredRrnBack, piiHash } from "@/lib/security/pii";
 function isValidRrnFront(s: string): boolean {
   return /^\d{6}$/.test(s);
 }
@@ -111,8 +112,8 @@ export function buildOrderBy(sort: SortKey | undefined, dir: SortDir | undefined
       case "birthDate":
         return customers.birthDate;
       case "rrn":
-        // 목록에 뒷자리만 표시하므로 정렬 키도 rrnBack 으로 일치
-        return customers.rrnBack;
+        // 주민번호는 암호화되어 있으므로 뒷자리 자체로는 정렬하지 않는다.
+        return customers.birthDate;
       case "phone1":
         return customers.phone1;
       case "job":
@@ -182,8 +183,8 @@ export function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | und
     conds.push(sql`regexp_replace(coalesce(${customers.phone1}, ''), '[^0-9]', '', 'g') LIKE ${"%" + filter.phone + "%"}`);
   }
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
-  if (filter.rrnFront) conds.push(eq(customers.rrnFront, filter.rrnFront));
-  if (filter.rrnBack) conds.push(eq(customers.rrnBack, filter.rrnBack));
+  if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, piiHash(filter.rrnFront)!));
+  if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, piiHash(filter.rrnBack)!));
   if (filter.birthYearFrom !== undefined) {
     conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
   }
@@ -258,8 +259,7 @@ export async function listCustomers(
         agentName: users.name,
         name: customers.name,
         birthDate: customers.birthDate,
-        rrnFront: customers.rrnFront,
-        rrnBack: customers.rrnBack,
+        rrnBackEnc: customers.rrnBackEnc,
         phone1: customers.phone1,
         job: customers.job,
         address: customers.address,
@@ -292,9 +292,14 @@ export async function listCustomers(
   ]);
 
   const count = countResult[0].count;
+  const safeRows = rows.map(({ rrnBackEnc, ...row }) => ({
+    ...row,
+    rrnFront: null,
+    rrnBack: getStoredRrnBack({ rrnBackEnc }),
+  }));
 
   return {
-    rows: rows as ListedCustomer[],
+    rows: safeRows as ListedCustomer[],
     total: count,
     page: filter.page,
     perPage: filter.perPage,
