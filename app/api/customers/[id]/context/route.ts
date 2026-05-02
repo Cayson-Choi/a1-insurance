@@ -7,13 +7,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/rbac";
 import { getCustomerDetail, getDetailContext } from "@/lib/customers/get-detail";
 import { isUuid } from "@/lib/security/ids";
+import {
+  apiSecurityHeaders,
+  rateLimit,
+  rateLimitKey,
+  tooManyRequests,
+} from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const res = NextResponse.json(body, init);
-  res.headers.set("Cache-Control", "no-store, max-age=0");
-  return res;
+  return apiSecurityHeaders(res) as NextResponse;
 }
 
 export async function GET(
@@ -21,6 +26,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireUser();
+  const limited = rateLimit(rateLimitKey("customer-context", user.agentId, req), 180, 60_000);
+  if (!limited.ok) return tooManyRequests(limited.resetAt);
+
   const { id } = await params;
   if (!isUuid(id)) {
     return jsonNoStore(

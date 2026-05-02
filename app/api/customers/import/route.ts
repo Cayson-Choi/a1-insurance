@@ -24,12 +24,24 @@ import {
   getStoredRrnFrontHash,
   piiHash,
 } from "@/lib/security/pii";
+import {
+  apiSecurityHeaders,
+  isSameOrigin,
+  rateLimit,
+  rateLimitKey,
+  tooManyRequests,
+} from "@/lib/security/rate-limit";
 
 // 엑셀 1회 처리 상한 — 메모리 폭주(zip-bomb 변형)·UI 멈춤 방지.
 // 운영 데이터 규모(~수만 건) 고려 50,000 행이면 충분.
 const MAX_IMPORT_ROWS = 50_000;
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
+
+type ExistingCustomerMatch = Pick<
+  Customer,
+  "id" | "customerCode" | "agentId" | "name" | "phone1" | "rrnFrontHash" | "rrnBackHash"
+>;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -49,12 +61,17 @@ function isXlsxBuffer(buf: ArrayBuffer): boolean {
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const res = NextResponse.json(body, init);
-  res.headers.set("Cache-Control", "no-store, max-age=0");
-  return res;
+  return apiSecurityHeaders(res) as NextResponse;
 }
 
 export async function POST(req: NextRequest) {
   const me = await requireUser();
+  if (!isSameOrigin(req)) {
+    return jsonNoStore({ error: "허용되지 않은 요청 출처입니다." }, { status: 403 });
+  }
+  const limited = rateLimit(rateLimitKey("customers-import", me.agentId, req), 8, 60_000);
+  if (!limited.ok) return tooManyRequests(limited.resetAt);
+
   const perms = await getPermissions(me.agentId);
   if (!perms?.canCreate) {
     return jsonNoStore(
@@ -166,10 +183,21 @@ export async function POST(req: NextRequest) {
       .where(scopeWhere);
 
     // 매칭 시뮬레이션: DB 를 읽어서 엑셀 행마다 어떤 키로 매칭될지 카운트만 계산 (쓰기 없음)
-    const allExisting = await db.select().from(customers).where(scopeWhere);
-    const byCode = new Map<string, Customer>();
-    const byRrn = new Map<string, Customer>();
-    const byNamePhone = new Map<string, Customer>();
+    const allExisting = await db
+      .select({
+        id: customers.id,
+        customerCode: customers.customerCode,
+        agentId: customers.agentId,
+        name: customers.name,
+        phone1: customers.phone1,
+        rrnFrontHash: customers.rrnFrontHash,
+        rrnBackHash: customers.rrnBackHash,
+      })
+      .from(customers)
+      .where(scopeWhere);
+    const byCode = new Map<string, ExistingCustomerMatch>();
+    const byRrn = new Map<string, ExistingCustomerMatch>();
+    const byNamePhone = new Map<string, ExistingCustomerMatch>();
     for (const c of allExisting) {
       if (c.customerCode) byCode.set(c.customerCode, c);
       const frontHash = getStoredRrnFrontHash(c);
@@ -260,12 +288,23 @@ export async function POST(req: NextRequest) {
   try {
     await db.transaction(async (tx) => {
       // RBAC 스코프 적용 — agent 는 본인 담당분만 매칭 가능. (preview 와 동일 로직)
-      const allExisting = await tx.select().from(customers).where(scopeWhere);
+      const allExisting = await tx
+        .select({
+          id: customers.id,
+          customerCode: customers.customerCode,
+          agentId: customers.agentId,
+          name: customers.name,
+          phone1: customers.phone1,
+          rrnFrontHash: customers.rrnFrontHash,
+          rrnBackHash: customers.rrnBackHash,
+        })
+        .from(customers)
+        .where(scopeWhere);
       existingTotal = allExisting.length;
 
-      const byCode = new Map<string, Customer>();
-      const byRrn = new Map<string, Customer>();
-      const byNamePhone = new Map<string, Customer>();
+      const byCode = new Map<string, ExistingCustomerMatch>();
+      const byRrn = new Map<string, ExistingCustomerMatch>();
+      const byNamePhone = new Map<string, ExistingCustomerMatch>();
       const pendingInserts: NewCustomer[] = [];
       for (const c of allExisting) {
         if (c.customerCode) byCode.set(c.customerCode, c);
@@ -298,7 +337,7 @@ export async function POST(req: NextRequest) {
         const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
 
         // --- 매칭 ---
-        let existing: Customer | undefined;
+        let existing: ExistingCustomerMatch | undefined;
         if (c.customerCode && byCode.has(c.customerCode)) {
           existing = byCode.get(c.customerCode);
           matchedCode++;

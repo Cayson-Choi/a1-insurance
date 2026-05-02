@@ -33,10 +33,37 @@ const HEADER_ORDER: Array<[keyof typeof EXCEL_HEADERS, number]> = [
   ["agentId", 10],
 ];
 
-export type ExportRow = Omit<
+type ExportableCustomer = Pick<
   Customer,
-  "rrnFrontHash" | "rrnBackHash" | "rrnBackEnc"
-> & {
+  | "customerCode"
+  | "agentId"
+  | "name"
+  | "birthDate"
+  | "phone1"
+  | "job"
+  | "address"
+  | "addressDetail"
+  | "callResult"
+  | "dbProduct"
+  | "dbPremium"
+  | "dbHandler"
+  | "subCategory"
+  | "dbPolicyNo"
+  | "dbRegisteredAt"
+  | "mainCategory"
+  | "dbStartAt"
+  | "dbEndAt"
+  | "branch"
+  | "hq"
+  | "team"
+  | "fax"
+  | "reservationReceived"
+  | "createdAt"
+  | "updatedAt"
+  | "dbCompany"
+>;
+
+export type ExportRow = ExportableCustomer & {
   rrnFront: null;
   rrnBack: string | null;
   agentName: string | null;

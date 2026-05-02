@@ -87,6 +87,8 @@ export const loginEvents = pgTable(
   (t) => [
     index("login_events_agent_idx").on(t.agentId, t.createdAt),
     index("login_events_created_idx").on(t.createdAt),
+    index("login_events_success_created_idx").on(t.success, t.createdAt),
+    index("login_events_ip_created_idx").on(t.ip, t.createdAt),
   ],
 );
 
@@ -137,21 +139,35 @@ export const customers = pgTable(
     index("customers_db_registered_idx").on(t.dbRegisteredAt),
     index("customers_call_result_idx").on(t.callResult),
     // buildOrderBy 가 모든 정렬 케이스에서 desc(createdAt) 을 tie-breaker 로 추가하므로 index 필요.
+    index("customers_default_sort_idx").on(t.dbRegisteredAt, t.createdAt),
+    index("customers_agent_default_sort_idx").on(t.agentId, t.dbRegisteredAt, t.createdAt),
+    index("customers_agent_name_sort_idx").on(t.agentId, t.name, t.createdAt),
+    index("customers_birth_created_idx").on(t.birthDate, t.createdAt),
+    index("customers_updated_created_idx").on(t.updatedAt, t.createdAt),
     index("customers_created_at_idx").on(t.createdAt),
   ],
 );
 
-export const auditLogs = pgTable("audit_logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  actorAgentId: varchar("actor_agent_id", { length: 20 }).notNull(),
-  customerId: uuid("customer_id"),
-  action: auditActionEnum("action").notNull(),
-  before: jsonb("before"),
-  after: jsonb("after"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorAgentId: varchar("actor_agent_id", { length: 20 }).notNull(),
+    customerId: uuid("customer_id"),
+    action: auditActionEnum("action").notNull(),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("audit_logs_created_idx").on(t.createdAt),
+    index("audit_logs_actor_created_idx").on(t.actorAgentId, t.createdAt),
+    index("audit_logs_action_created_idx").on(t.action, t.createdAt),
+    index("audit_logs_customer_idx").on(t.customerId),
+  ],
+);
 
 export const usersRelations = relations(users, ({ many }) => ({
   customers: many(customers),
