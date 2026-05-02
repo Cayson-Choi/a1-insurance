@@ -290,8 +290,17 @@ export function ExcelUploader() {
       toast.error("엑셀 파일을 선택하세요.");
       return;
     }
-    setMode(targetMode);
-    return requestChunked(targetMode);
+    try {
+      setMode(targetMode);
+      await requestChunked(targetMode);
+      return;
+    } catch (e) {
+      console.error(e);
+      toast.error("?ㅽ듃?뚰겕 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+    } finally {
+      setMode("idle");
+      setConfirmOpen(false);
+    }
     const fd = new FormData();
     fd.append("file", file as File);
     try {
@@ -472,10 +481,10 @@ export function ExcelUploader() {
                 </tr>
               </thead>
               <tbody>
-                {preview.previewSample.map((r) => (
-                  <tr key={r.rowNumber} className="border-t">
+                {preview.previewSample.map((r, index) => (
+                  <tr key={`${index}-${r.rowNumber}`} className="border-t">
                     <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
-                      {r.rowNumber}
+                      {index + 1}
                     </td>
                     <td className="px-2 py-1.5 font-medium">{r.name}</td>
                     <td className="px-2 py-1.5 font-mono">{r.agentId ?? "—"}</td>
