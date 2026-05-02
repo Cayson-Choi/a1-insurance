@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireUserWithPerms } from "@/lib/auth/rbac";
+import { db } from "@/lib/db/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExcelUploader } from "@/components/admin/excel-uploader";
 
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
 export default async function AdminExcelPage() {
   const me = await requireUserWithPerms();
   if (me.role !== "admin" && !me.canCreate) redirect("/customers");
+  const knownAgentIds = (await db.query.users.findMany({
+    columns: { agentId: true },
+  })).map((row) => row.agentId);
 
   return (
     <div className="space-y-5">
@@ -35,7 +39,7 @@ export default async function AdminExcelPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ExcelUploader />
+            <ExcelUploader knownAgentIds={knownAgentIds} />
           </CardContent>
         </Card>
 
