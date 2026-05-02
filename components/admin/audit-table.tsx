@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, Eye, Inbox, PencilLine, Users, UserCog } from "lucide-react";
+import {
+  ArrowRight,
+  Eye,
+  FileSpreadsheet,
+  Inbox,
+  KeyRound,
+  LogOut,
+  PencilLine,
+  ShieldAlert,
+  UserMinus,
+  UserPlus,
+  Users,
+  UserCog,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -37,6 +50,43 @@ const ACTION_META: Record<
     className: "bg-rose-50 text-rose-700 border-rose-200",
     icon: Eye,
   },
+  user_create: {
+    label: "사용자 생성",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    icon: UserPlus,
+  },
+  user_update: {
+    label: "사용자 수정",
+    className: "bg-sky-50 text-sky-700 border-sky-200",
+    icon: UserCog,
+  },
+  user_delete: {
+    label: "사용자 삭제",
+    className: "bg-rose-50 text-rose-700 border-rose-200",
+    icon: UserMinus,
+  },
+  password_reset: {
+    label: "비밀번호 리셋",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    icon: KeyRound,
+  },
+  force_logout: {
+    label: "강제 로그아웃",
+    className: "bg-orange-50 text-orange-700 border-orange-200",
+    icon: LogOut,
+  },
+  import: {
+    label: "엑셀 일괄등록",
+    className: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    icon: FileSpreadsheet,
+  },
+};
+
+// 미지정 액션 fallback (호환성).
+const UNKNOWN_META = {
+  label: "기타",
+  className: "bg-slate-50 text-slate-700 border-slate-200",
+  icon: ShieldAlert,
 };
 
 function Summary({ row }: { row: AuditRow }) {
@@ -49,6 +99,35 @@ function Summary({ row }: { row: AuditRow }) {
     return (
       <span className="font-mono text-xs">
         {b} <ArrowRight className="inline h-3 w-3" /> {a}
+      </span>
+    );
+  }
+  if (row.action === "import") {
+    const a = row.after as
+      | { total?: number; updated?: number; inserted?: number }
+      | null;
+    return (
+      <span className="text-xs">
+        총 <b>{a?.total ?? 0}</b>건 — 신규 {a?.inserted ?? 0} · 갱신 {a?.updated ?? 0}
+      </span>
+    );
+  }
+  if (row.action === "user_create" || row.action === "user_delete") {
+    const target = (row.after ?? row.before) as
+      | { agentId?: string; name?: string; role?: string }
+      | null;
+    return (
+      <span className="text-xs">
+        {target?.name ?? "—"} · {target?.agentId ?? "—"}
+        {target?.role ? ` (${target.role})` : ""}
+      </span>
+    );
+  }
+  if (row.action === "password_reset" || row.action === "force_logout") {
+    const t = row.after as { agentId?: string; name?: string } | null;
+    return (
+      <span className="text-xs">
+        대상: {t?.name ?? "—"} · {t?.agentId ?? "—"}
       </span>
     );
   }
@@ -96,7 +175,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((r) => {
-            const meta = ACTION_META[r.action];
+            const meta = ACTION_META[r.action] ?? UNKNOWN_META;
             const Icon = meta.icon;
             return (
               <TableRow key={r.id}>

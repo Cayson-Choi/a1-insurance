@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { users } from "@/lib/db/schema";
+import { users, auditLogs } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/rbac";
 import { hashPassword } from "@/lib/auth/password";
 import { notifyForceLogout } from "@/lib/notifications";
@@ -12,6 +12,31 @@ import {
   UpdateUserSchema,
   ResetPasswordSchema,
 } from "@/lib/users/schema";
+
+// audit_logs.customer_id 가 NULL 인 사용자 관리 이벤트 — 비밀번호 해시는 절대 기록하지 않음.
+async function writeUserAudit(
+  actorAgentId: string,
+  action:
+    | "user_create"
+    | "user_update"
+    | "user_delete"
+    | "password_reset"
+    | "force_logout",
+  before: unknown,
+  after: unknown,
+): Promise<void> {
+  try {
+    await db.insert(auditLogs).values({
+      actorAgentId,
+      customerId: null,
+      action,
+      before: before === undefined ? null : (before as Record<string, unknown>),
+      after: after === undefined ? null : (after as Record<string, unknown>),
+    });
+  } catch (e) {
+    console.warn("[audit]", action, "insert failed:", e);
+  }
+}
 
 type ActionResult =
   | { ok: true }
@@ -27,7 +52,7 @@ function flattenZodErrors(issues: readonly { path: readonly PropertyKey[]; messa
 }
 
 export async function createUserAction(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = CreateUserSchema.safeParse(raw);
@@ -57,6 +82,18 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
     name: d.name,
     role: d.role,
     passwordHash,
+    canCreate: d.canCreate,
+    canEdit: d.canEdit,
+    canDelete: d.canDelete,
+    canExport: d.canExport,
+    canDownloadImage: d.canDownloadImage,
+  });
+
+  // 비밀번호는 기록하지 않음 — 권한 플래그·역할만 스냅샷.
+  await writeUserAudit(actor.agentId, "user_create", null, {
+    agentId: d.agentId,
+    name: d.name,
+    role: d.role,
     canCreate: d.canCreate,
     canEdit: d.canEdit,
     canDelete: d.canDelete,
@@ -106,6 +143,31 @@ export async function updateUserAction(
     })
     .where(eq(users.agentId, agentId));
 
+  await writeUserAudit(
+    actor.agentId,
+    "user_update",
+    {
+      agentId: target.agentId,
+      name: target.name,
+      role: target.role,
+      canCreate: target.canCreate,
+      canEdit: target.canEdit,
+      canDelete: target.canDelete,
+      canExport: target.canExport,
+      canDownloadImage: target.canDownloadImage,
+    },
+    {
+      agentId,
+      name: d.name,
+      role: d.role,
+      canCreate: d.canCreate,
+      canEdit: d.canEdit,
+      canDelete: d.canDelete,
+      canExport: d.canExport,
+      canDownloadImage: d.canDownloadImage,
+    },
+  );
+
   revalidatePath("/admin/users");
   return { ok: true };
 }
@@ -114,7 +176,7 @@ export async function resetPasswordAction(
   agentId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = ResetPasswordSchema.safeParse(raw);
@@ -131,6 +193,14 @@ export async function resetPasswordAction(
 
   const passwordHash = await hashPassword(parsed.data.password);
   await db.update(users).set({ passwordHash }).where(eq(users.agentId, agentId));
+
+  // 비밀번호 자체는 기록 X — 누가 누구의 비밀번호를 언제 리셋했는지만.
+  await writeUserAudit(
+    actor.agentId,
+    "password_reset",
+    null,
+    { agentId: target.agentId, name: target.name },
+  );
 
   revalidatePath("/admin/users");
   return { ok: true };
@@ -157,6 +227,18 @@ export async function forceLogoutAction(agentId: string): Promise<ActionResult> 
     at: now,
   });
 
+  await writeUserAudit(
+    actor.agentId,
+    "force_logout",
+    null,
+    {
+      agentId: target.agentId,
+      name: target.name,
+      role: target.role,
+      at: now.toISOString(),
+    },
+  );
+
   revalidatePath("/admin/users");
   return { ok: true };
 }
@@ -170,6 +252,18 @@ export async function deleteUserAction(agentId: string): Promise<ActionResult> {
   if (!target) return { ok: false, error: "사용자를 찾을 수 없습니다." };
 
   await db.delete(users).where(eq(users.agentId, agentId));
+
+  await writeUserAudit(
+    actor.agentId,
+    "user_delete",
+    {
+      agentId: target.agentId,
+      name: target.name,
+      role: target.role,
+    },
+    null,
+  );
+
   // customers.agent_id FK는 ON DELETE SET NULL 이므로 미배정 상태로 전환됨
   revalidatePath("/admin/users");
   revalidatePath("/customers");

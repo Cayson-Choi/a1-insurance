@@ -2,7 +2,17 @@ import { and, desc, eq, gte, lte, SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { auditLogs, users, customers } from "@/lib/db/schema";
 
-export type AuditAction = "edit" | "agent_change" | "bulk_change" | "rrn_decrypt";
+export type AuditAction =
+  | "edit"
+  | "agent_change"
+  | "bulk_change"
+  | "rrn_decrypt"
+  | "user_create"
+  | "user_update"
+  | "user_delete"
+  | "password_reset"
+  | "force_logout"
+  | "import";
 
 export type AuditFilter = {
   action?: AuditAction;
@@ -16,7 +26,18 @@ export type AuditFilter = {
 export const DEFAULT_PER_PAGE = 30;
 export const MAX_PER_PAGE = 100;
 
-const ACTIONS: readonly AuditAction[] = ["edit", "agent_change", "bulk_change", "rrn_decrypt"];
+const ACTIONS: readonly AuditAction[] = [
+  "edit",
+  "agent_change",
+  "bulk_change",
+  "rrn_decrypt",
+  "user_create",
+  "user_update",
+  "user_delete",
+  "password_reset",
+  "force_logout",
+  "import",
+];
 
 function parseAction(v: unknown): AuditAction | undefined {
   if (typeof v !== "string") return undefined;

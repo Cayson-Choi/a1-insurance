@@ -20,6 +20,12 @@ const ACTION_LABEL: Record<string, string> = {
   agent_change: "담당자 변경",
   bulk_change: "일괄 변경",
   rrn_decrypt: "주민번호 조회",
+  user_create: "사용자 생성",
+  user_update: "사용자 수정",
+  user_delete: "사용자 삭제",
+  password_reset: "비밀번호 리셋",
+  force_logout: "강제 로그아웃",
+  import: "엑셀 일괄등록",
 };
 
 export function AuditFilterBar({
@@ -81,6 +87,12 @@ export function AuditFilterBar({
             <SelectItem value="agent_change">담당자 변경</SelectItem>
             <SelectItem value="bulk_change">일괄 변경</SelectItem>
             <SelectItem value="rrn_decrypt">주민번호 조회</SelectItem>
+            <SelectItem value="user_create">사용자 생성</SelectItem>
+            <SelectItem value="user_update">사용자 수정</SelectItem>
+            <SelectItem value="user_delete">사용자 삭제</SelectItem>
+            <SelectItem value="password_reset">비밀번호 리셋</SelectItem>
+            <SelectItem value="force_logout">강제 로그아웃</SelectItem>
+            <SelectItem value="import">엑셀 일괄등록</SelectItem>
           </SelectContent>
         </Select>
       </div>

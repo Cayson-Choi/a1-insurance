@@ -35,6 +35,13 @@ export const auditActionEnum = pgEnum("audit_action", [
   "bulk_change",
   "edit",
   "rrn_decrypt",
+  // 사용자 관리·보안 이벤트 — customerId 는 NULL.
+  "user_create",
+  "user_update",
+  "user_delete",
+  "password_reset",
+  "force_logout",
+  "import",
 ]);
 
 export const users = pgTable(

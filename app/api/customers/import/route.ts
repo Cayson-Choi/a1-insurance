@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { customers } from "@/lib/db/schema";
-import { requireUser, getPermissions } from "@/lib/auth/rbac";
+import { customers, auditLogs } from "@/lib/db/schema";
+import {
+  requireUser,
+  getPermissions,
+  canSeeAllCustomers,
+  canReassignAgent,
+} from "@/lib/auth/rbac";
 import { parseCustomersWorkbook } from "@/lib/excel/importer";
 import {
   EXCEL_HEADERS,
@@ -11,6 +16,10 @@ import {
   parseDateTimeCell,
 } from "@/lib/excel/column-map";
 import type { NewCustomer, Customer } from "@/lib/db/schema";
+
+// 엑셀 1회 처리 상한 — 메모리 폭주(zip-bomb 변형)·UI 멈춤 방지.
+// 운영 데이터 규모(~수만 건) 고려 50,000 행이면 충분.
+const MAX_IMPORT_ROWS = 50_000;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,6 +76,15 @@ export async function POST(req: NextRequest) {
   const buf = await file.arrayBuffer();
   const parsed = await parseCustomersWorkbook(buf);
 
+  if (parsed.total > MAX_IMPORT_ROWS) {
+    return NextResponse.json(
+      {
+        error: `한 번에 업로드 가능한 행은 최대 ${MAX_IMPORT_ROWS.toLocaleString()}건입니다. 파일을 분할해 주세요.`,
+      },
+      { status: 400 },
+    );
+  }
+
   if (parsed.headerErrors.length) {
     return NextResponse.json(
       {
@@ -94,14 +112,24 @@ export async function POST(req: NextRequest) {
     if (row.errors.length) invalidCount++;
   }
 
+  // RBAC 스코프: agent 는 본인 담당분만 매칭 풀에 포함 — 타 담당자 고객을
+  // customer_code/주민/이름+전화 매칭으로 가로채는 우회 차단.
+  // admin·manager 는 전체.
+  const scopeWhere = canSeeAllCustomers(me) ? sql`true` : eq(customers.agentId, me.agentId);
+
+  // agent role 은 자기 자신에게만 신규 할당 가능 — 엑셀 agentId 컬럼으로 다른 담당자에게
+  // 일괄 할당하는 경로를 차단. admin·manager 는 자유 재할당 가능.
+  const enforceSelfAssign = !canReassignAgent(me);
+
   // preview: 기존 DB 고객 수 + 예상 매칭 시뮬레이션
   if (mode === "preview") {
     const [{ count: existingCount }] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(customers);
+      .from(customers)
+      .where(scopeWhere);
 
     // 매칭 시뮬레이션: DB 를 읽어서 엑셀 행마다 어떤 키로 매칭될지 카운트만 계산 (쓰기 없음)
-    const allExisting = await db.select().from(customers);
+    const allExisting = await db.select().from(customers).where(scopeWhere);
     const byCode = new Map<string, Customer>();
     const byRrn = new Map<string, Customer>();
     const byNamePhone = new Map<string, Customer>();
@@ -121,6 +149,10 @@ export async function POST(req: NextRequest) {
     for (const row of parsed.rows) {
       if (!row.customer.name || row.customer.name === "이름없음") continue;
       const c = row.customer;
+      // agent 는 자기 자신에게만 할당 가능 — 시뮬레이션에서도 동일하게 보정해 미리보기/실행 결과 일치.
+      if (enforceSelfAssign && c.agentId && c.agentId !== me.agentId) {
+        c.agentId = me.agentId;
+      }
       const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
       const rrnBack = extractRrnBackRaw(row.raw);
       if (c.customerCode && byCode.has(c.customerCode)) {
@@ -184,7 +216,8 @@ export async function POST(req: NextRequest) {
 
   try {
     await db.transaction(async (tx) => {
-      const allExisting = await tx.select().from(customers);
+      // RBAC 스코프 적용 — agent 는 본인 담당분만 매칭 가능. (preview 와 동일 로직)
+      const allExisting = await tx.select().from(customers).where(scopeWhere);
       existingTotal = allExisting.length;
 
       const byCode = new Map<string, Customer>();
@@ -206,6 +239,14 @@ export async function POST(req: NextRequest) {
 
         const c = { ...row.customer };
         if (c.agentId && !validAgentIds.has(c.agentId)) c.agentId = null;
+        // agent 는 본인 외 다른 담당자에게 신규 할당 불가 — 강제로 본인으로 보정.
+        if (enforceSelfAssign && c.agentId && c.agentId !== me.agentId) {
+          c.agentId = me.agentId;
+        }
+        if (enforceSelfAssign && !c.agentId) {
+          // agentId 미지정 신규 등록은 actor 본인 소유로 (무주공 데이터 방지).
+          c.agentId = me.agentId;
+        }
 
         const rrnBack = extractRrnBackRaw(row.raw);
         const rrnFront = birthDateToFrontYymmdd(c.birthDate ?? null);
@@ -345,6 +386,31 @@ export async function POST(req: NextRequest) {
 
   // 엑셀에 매칭 안 된 기존 고객 = 그대로 유지됨
   const untouched = existingTotal - (updated + unchanged);
+
+  // 대량 변경 추적 — 행별 diff 가 아닌 요약을 단일 audit row 로 남김 (감사 부담 최소화).
+  // customerId 는 일괄성 동작이라 NULL.
+  if (updated > 0 || inserted > 0) {
+    try {
+      await db.insert(auditLogs).values({
+        actorAgentId: me.agentId,
+        customerId: null,
+        action: "import",
+        before: null,
+        after: {
+          total: parsed.total,
+          updated,
+          inserted,
+          unchanged,
+          skipped,
+          invalidCount,
+          unknownAgentCount,
+          enforceSelfAssign,
+        },
+      });
+    } catch (e) {
+      console.warn("[import] audit insert failed:", e);
+    }
+  }
 
   return NextResponse.json({
     ok: true,
