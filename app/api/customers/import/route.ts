@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { customers, auditLogs } from "@/lib/db/schema";
+import { customers, auditLogs, users } from "@/lib/db/schema";
 import {
   requireUser,
   getPermissions,
   canSeeAllCustomers,
   canReassignAgent,
 } from "@/lib/auth/rbac";
+import { hashPassword } from "@/lib/auth/password";
 import { parseCustomersWorkbook } from "@/lib/excel/importer";
 import {
   EXCEL_HEADERS,
@@ -37,6 +38,8 @@ import {
 const MAX_IMPORT_ROWS = 50_000;
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
+const AUTO_CREATED_AGENT_PASSWORD = "123456";
+const AGENT_ID_RE = /^[a-zA-Z0-9_-]{2,20}$/;
 
 type ExistingCustomerMatch = Pick<
   Customer,
@@ -52,6 +55,19 @@ export const maxDuration = 60;
 function normalizePhone(p: string | null | undefined): string {
   if (!p) return "";
   return p.replace(/\D/g, "");
+}
+
+function isValidAgentId(agentId: string): boolean {
+  return AGENT_ID_RE.test(agentId);
+}
+
+function agentNameFromRow(raw: Record<string, unknown>, agentId: string): string {
+  const value = raw[EXCEL_HEADERS.agentName];
+  const name =
+    typeof value === "string" || typeof value === "number"
+      ? String(value).trim()
+      : "";
+  return (name || agentId).slice(0, 60);
 }
 
 function isXlsxBuffer(buf: ArrayBuffer): boolean {
@@ -155,16 +171,29 @@ export async function POST(req: NextRequest) {
     columns: { agentId: true },
   });
   const validAgentIds = new Set(existingUsers.map((u) => u.agentId));
+  const canAutoCreateAgents = canReassignAgent(me);
+  const enforceSelfAssign = !canAutoCreateAgents;
+  const missingAgents = new Map<string, string>();
 
   let unknownAgentCount = 0;
   let invalidCount = 0;
   for (const row of parsed.rows) {
-    if (row.customer.agentId && !validAgentIds.has(row.customer.agentId)) {
-      unknownAgentCount++;
-      row.errors.push(`미등록 담당자ID: ${row.customer.agentId}`);
+    const agentId = row.customer.agentId;
+    if (agentId) {
+      if (!isValidAgentId(agentId)) {
+        row.errors.push(`담당자ID 형식 오류: ${agentId}`);
+      } else if (!validAgentIds.has(agentId)) {
+        if (canAutoCreateAgents) {
+          missingAgents.set(agentId, agentNameFromRow(row.raw, agentId));
+        } else {
+          unknownAgentCount++;
+          row.errors.push(`미등록 담당자ID: ${agentId}`);
+        }
+      }
     }
     if (row.errors.length) invalidCount++;
   }
+  const autoCreateAgentCount = canAutoCreateAgents ? missingAgents.size : 0;
 
   // RBAC 스코프: agent 는 본인 담당분만 매칭 풀에 포함 — 타 담당자 고객을
   // customer_code/주민/이름+전화 매칭으로 가로채는 우회 차단.
@@ -173,7 +202,6 @@ export async function POST(req: NextRequest) {
 
   // agent role 은 자기 자신에게만 신규 할당 가능 — 엑셀 agentId 컬럼으로 다른 담당자에게
   // 일괄 할당하는 경로를 차단. admin·manager 는 자유 재할당 가능.
-  const enforceSelfAssign = !canReassignAgent(me);
 
   // preview: 기존 DB 고객 수 + 예상 매칭 시뮬레이션
   if (mode === "preview") {
@@ -260,6 +288,7 @@ export async function POST(req: NextRequest) {
       existingCount,
       invalidCount,
       unknownAgentCount,
+      autoCreateAgentCount,
       willUpdate,
       willInsert,
       matchedCode,
@@ -284,9 +313,61 @@ export async function POST(req: NextRequest) {
   let matchedNamePhone = 0;
   let skipped = 0;
   let existingTotal = 0;
+  let createdAgentCount = 0;
 
   try {
     await db.transaction(async (tx) => {
+      if (missingAgents.size > 0) {
+        const passwordHash = await hashPassword(AUTO_CREATED_AGENT_PASSWORD);
+        const createdAgents = await tx
+          .insert(users)
+          .values(
+            Array.from(missingAgents.entries()).map(([agentId, name]) => ({
+              agentId,
+              name,
+              role: "agent" as const,
+              passwordHash,
+              canCreate: false,
+              canEdit: false,
+              canDelete: false,
+              canExport: false,
+              canDownloadImage: false,
+            })),
+          )
+          .onConflictDoNothing()
+          .returning({
+            agentId: users.agentId,
+            name: users.name,
+            role: users.role,
+          });
+
+        createdAgentCount = createdAgents.length;
+        for (const agentId of missingAgents.keys()) validAgentIds.add(agentId);
+
+        if (createdAgents.length > 0) {
+          await tx.insert(auditLogs).values(
+            createdAgents.map((agent) => ({
+              actorAgentId: me.agentId,
+              customerId: null,
+              action: "user_create" as const,
+              before: null,
+              after: {
+                agentId: agent.agentId,
+                name: agent.name,
+                role: agent.role,
+                source: "excel_import",
+                initialPassword: "default_123456",
+                canCreate: false,
+                canEdit: false,
+                canDelete: false,
+                canExport: false,
+                canDownloadImage: false,
+              },
+            })),
+          );
+        }
+      }
+
       // RBAC 스코프 적용 — agent 는 본인 담당분만 매칭 가능. (preview 와 동일 로직)
       const allExisting = await tx
         .select({
@@ -496,6 +577,8 @@ export async function POST(req: NextRequest) {
           skipped,
           invalidCount,
           unknownAgentCount,
+          autoCreateAgentCount,
+          createdAgentCount,
           enforceSelfAssign,
         },
       });
@@ -518,5 +601,7 @@ export async function POST(req: NextRequest) {
     skipped,
     invalidCount,
     unknownAgentCount,
+    autoCreateAgentCount,
+    createdAgentCount,
   });
 }

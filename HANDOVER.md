@@ -12,6 +12,7 @@
 - 민감정보: 주민번호 앞자리 HMAC, 뒷자리 AES-256-GCM 암호화
 - 최근 성능 보강: 고객 목록 정렬/검색용 인덱스, import batch insert, import/export 최소 컬럼 조회
 - 최근 보안 보강: import/export/context API rate limit, no-store 보안 헤더, import same-origin 검사
+- 최근 운영 보강: 엑셀 담당자ID가 사용자 관리에 없으면 import 실행 시 담당자 계정 자동 생성
 
 ## 필수 환경변수
 
@@ -74,6 +75,16 @@ import 매칭 우선순위:
 3. 이름 + 전화번호 숫자 정규화
 
 신규 고객 insert는 500건 단위로 batch 처리합니다.
+
+엑셀 담당자ID 자동 생성:
+
+- 대상: admin/manager처럼 담당자 재배정 권한이 있는 업로드
+- 생성 조건: 엑셀의 담당자ID가 `users.agent_id`에 없고 형식이 `a-z`, `A-Z`, `0-9`, `_`, `-`, 2~20자 조건을 만족
+- 이름: 엑셀의 담당자 컬럼 값을 사용하고, 없으면 담당자ID를 이름으로 사용
+- 역할: `agent`
+- 최초 비밀번호: `123456`
+- 권한: 생성/수정/삭제/export/이미지 저장 모두 `false`
+- 감사 로그: `user_create`, `source: excel_import`
 
 ## 보안 주의사항
 

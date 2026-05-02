@@ -29,6 +29,7 @@ type PreviewResult = {
   existingCount: number;
   invalidCount: number;
   unknownAgentCount: number;
+  autoCreateAgentCount: number;
   willUpdate: number;
   willInsert: number;
   matchedCode: number;
@@ -52,6 +53,8 @@ type ApplyResult = {
   skipped: number;
   invalidCount: number;
   unknownAgentCount: number;
+  autoCreateAgentCount: number;
+  createdAgentCount: number;
 };
 
 export function ExcelUploader() {
@@ -88,7 +91,7 @@ export function ExcelUploader() {
       } else {
         const r = json as ApplyResult;
         toast.success(
-          `업로드 완료: 업데이트 ${r.updated}건 · 신규 ${r.inserted}건 · 기존 유지 ${r.untouched}건`,
+          `업로드 완료: 업데이트 ${r.updated}건 · 신규 ${r.inserted}건 · 담당자 생성 ${r.createdAgentCount ?? 0}명 · 기존 유지 ${r.untouched}건`,
           { duration: 6000 },
         );
         setPreview(null);
@@ -208,6 +211,11 @@ export function ExcelUploader() {
               value={preview.unknownAgentCount}
               danger={preview.unknownAgentCount > 0}
             />
+            <Stat
+              label="담당자 생성 예정"
+              value={preview.autoCreateAgentCount ?? 0}
+              tone="accent"
+            />
           </div>
           <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
             <span>매칭 내역:</span>
@@ -215,7 +223,13 @@ export function ExcelUploader() {
             <span>주민번호 <b className="tabular-nums">{preview.matchedRrn}</b>건</span>
             <span>이름+전화 <b className="tabular-nums">{preview.matchedNamePhone}</b>건</span>
           </div>
-          {preview.unknownAgentCount > 0 ? (
+          {(preview.autoCreateAgentCount ?? 0) > 0 ? (
+            <div className="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2 text-xs">
+              엑셀에 있는 담당자ID 중 사용자 관리에 없는 담당자는 업로드 실행 시 자동 생성됩니다.
+              최초 비밀번호는 <b>123456</b>이고, 기본 권한은 모두 꺼진 담당자 계정으로 생성됩니다.
+            </div>
+          ) : null}
+          {preview.unknownAgentCount > 0 && (preview.autoCreateAgentCount ?? 0) === 0 ? (
             <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs">
               ⚠ 엑셀의 담당자ID 중 사용자 DB에 없는 값이 있습니다. 해당 행은 담당자{" "}
               <b>미배정</b>으로 저장됩니다. 사용자 관리 페이지에서 먼저 등록하는 걸 권장합니다.
