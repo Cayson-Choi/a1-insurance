@@ -453,7 +453,7 @@ export function ExcelUploader({
           {(preview.autoCreateAgentCount ?? 0) > 0 ? (
             <div className="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2 text-xs">
               엑셀에 있는 담당자ID 중 사용자 관리에 없는 담당자는 업로드 실행 시 자동 생성됩니다.
-              최초 비밀번호는 <b>123456</b>이고, 기본 권한은 모두 꺼진 담당자 계정으로 생성됩니다.
+              기본 권한은 모두 꺼진 담당자 계정으로 생성됩니다.
             </div>
           ) : null}
           {preview.unknownAgentCount > 0 && (preview.autoCreateAgentCount ?? 0) === 0 ? (
