@@ -240,8 +240,8 @@ export function ListTable({
       {/* flex-1 min-h-0 chain — 부모(customers/page) 의 flex-col 안에서 남는 세로 공간을 차지해
           내부 테이블 컨테이너가 viewport 안에서만 스크롤되도록. page-level 스크롤이 사라져
           sticky 헤더가 항상 viewport 상단에 보인다. */}
-      <div ref={selectionRootRef} className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center justify-end gap-2 mb-2 text-xs text-muted-foreground shrink-0">
+      <div ref={selectionRootRef} className="flex flex-col md:flex-1 md:min-h-0">
+      <div className="hidden md:flex items-center justify-end gap-2 mb-2 text-xs text-muted-foreground shrink-0">
         <span className="hidden md:inline">컬럼 헤더 드래그·우측 가장자리로 폭 조절·헤더 클릭으로 정렬</span>
         <button
           type="button"
@@ -258,7 +258,7 @@ export function ListTable({
       {/* 내부 스크롤 컨테이너 — flex-1 min-h-0 로 부모의 남는 공간을 모두 차지.
           가로 스크롤바가 항상 viewport 하단에 위치하고 컬럼 헤더가 컨테이너 상단에 sticky 로 고정된다.
           한 페이지 행 수가 많아도(500) 헤더와 가로 스크롤이 멀어지지 않는다. */}
-      <div className="md:hidden max-h-[65dvh] space-y-2 overflow-auto rounded-lg border bg-card p-2 shadow-sm overscroll-contain">
+      <div className="md:hidden space-y-2 rounded-lg border bg-card p-2 shadow-sm">
         {rows.map((c) => (
           <MobileCustomerCard
             key={c.id}
@@ -633,7 +633,7 @@ const MobileCustomerCard = memo(function MobileCustomerCard({
   return (
     <article
       data-customer-row="true"
-      className="rounded-md border bg-background px-3 py-2.5 transition hover:bg-brand/20"
+      className="rounded-md border bg-background px-3 py-2 transition hover:bg-brand/20"
     >
       <div className="flex items-start gap-3">
         {canBulkEdit ? (
@@ -651,13 +651,13 @@ const MobileCustomerCard = memo(function MobileCustomerCard({
             <span className="truncate text-base font-semibold text-foreground">{customer.name}</span>
             <CallResultBadge value={customer.callResult} />
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {customer.customerCode ? <span className="tabular-nums">{customer.customerCode}</span> : null}
             {phone ? <span className="tabular-nums">{phone}</span> : null}
             {showAgentColumn ? <span>{agent || "미배정"}</span> : null}
           </div>
           {address ? (
-            <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+            <div className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
               {address}
             </div>
           ) : null}

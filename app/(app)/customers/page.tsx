@@ -53,7 +53,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   return (
     // h-full + flex-col + min-h-0 — 페이지 높이를 viewport 에 고정해 page-level 스크롤 제거.
     // ListTable 의 내부 스크롤 컨테이너가 sticky 헤더와 가로 스크롤바를 viewport 에 붙여 둔다.
-    <div className="h-full flex flex-col gap-5 min-h-0">
+    <div className="flex flex-col gap-5 md:h-full md:min-h-0">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-0 shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">고객 목록</h1>
