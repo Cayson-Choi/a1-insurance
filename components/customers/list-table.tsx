@@ -246,7 +246,7 @@ export function ListTable({
       {/* 내부 스크롤 컨테이너 — flex-1 min-h-0 로 부모의 남는 공간을 모두 차지.
           가로 스크롤바가 항상 viewport 하단에 위치하고 컬럼 헤더가 컨테이너 상단에 sticky 로 고정된다.
           한 페이지 행 수가 많아도(500) 헤더와 가로 스크롤이 멀어지지 않는다. */}
-      <div className="flex-1 min-h-0 border bg-card shadow-sm overflow-auto">
+      <div className="flex-1 min-h-0 border bg-card shadow-sm overflow-auto max-md:max-h-[65dvh] max-md:overscroll-contain max-md:rounded-lg">
         {/* id 고정 — @dnd-kit 의 자동 생성 sequential ID 가 SSR/Client 간 다르게 매겨져 hydration mismatch 발생.
             명시적 id 로 양쪽이 동일한 aria-describedby 값을 갖도록 강제. */}
         <DndContext
@@ -255,7 +255,7 @@ export function ListTable({
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
-          <table ref={tableRef} className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
+          <table ref={tableRef} className="w-full text-xs md:text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
             <colgroup>
               {canBulkEdit ? <col style={{ width: 40 }} /> : null}
               {visibleIds.map((id) => (
@@ -265,7 +265,7 @@ export function ListTable({
             <thead>
               <tr>
                 {canBulkEdit ? (
-                  <th className="h-10 px-3 text-left align-middle border-b border-r bg-muted sticky top-0 z-20">
+                  <th className="h-9 md:h-10 px-2 md:px-3 text-left align-middle border-b border-r bg-muted md:sticky md:top-0 md:z-20">
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -320,7 +320,7 @@ export function ListTable({
       </div>
 
       {canBulkEdit && selectedCount > 0 ? (
-        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background/95 backdrop-blur shadow-xl ring-1 ring-foreground/10 px-4 py-2 flex items-center gap-3">
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border bg-background/95 backdrop-blur shadow-xl ring-1 ring-foreground/10 px-4 py-2 flex items-center gap-3 max-md:bottom-3 max-md:w-[calc(100vw-1rem)] max-md:max-w-none max-md:rounded-lg max-md:px-3 max-md:py-2 max-md:flex-wrap max-md:justify-center">
           <span className="text-sm font-medium">
             <b className="text-brand-accent tabular-nums">{selectedCount}</b>건 선택됨
           </span>
@@ -489,12 +489,12 @@ function SortableHeader({
       style={style}
       className={cn(
         // sticky top-0 + 불투명 bg-muted 로 헤더 고정 — 반투명(bg-muted/50)이면 스크롤되는 행이 비쳐 가독성 ↓
-        "h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted select-none sticky top-0 z-20",
+        "h-9 md:h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted select-none md:sticky md:top-0 md:z-20",
         // 드래그 중에는 다른 sticky th 들 위로 띄움
         isDragging && "z-30",
       )}
     >
-      <div className="flex items-center justify-between gap-1 pl-2 pr-1 group">
+      <div className="flex items-center justify-between gap-1 pl-1.5 pr-1 md:pl-2 group">
         <button
           type="button"
           {...attributes}
@@ -560,7 +560,7 @@ const CustomerRow = memo(function CustomerRow({
   return (
     <tr className="border-b last:border-0 hover:bg-brand/25">
       {canBulkEdit ? (
-        <td className="px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
+        <td className="px-2 md:px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
             data-customer-select="true"
@@ -597,7 +597,7 @@ const DataCell = memo(function DataCell({
   const content = renderCellContent(columnId, customer, canUnmaskPhone);
   const cls = cellClass(columnId);
   return (
-    <td className={cn("px-3 py-2 align-middle truncate border-r last:border-r-0", cls)}>
+    <td className={cn("px-2 md:px-3 py-2 align-middle truncate border-r last:border-r-0", cls)}>
       <Link href={href} className="block truncate" title={typeof content === "string" ? content : undefined}>
         {content}
       </Link>
