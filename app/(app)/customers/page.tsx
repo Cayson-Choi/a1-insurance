@@ -54,7 +54,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     // h-full + flex-col + min-h-0 — 페이지 높이를 viewport 에 고정해 page-level 스크롤 제거.
     // ListTable 의 내부 스크롤 컨테이너가 sticky 헤더와 가로 스크롤바를 viewport 에 붙여 둔다.
     <div className="h-full flex flex-col gap-5 min-h-0">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-0 shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">고객 목록</h1>
           <p className="text-sm text-muted-foreground">
@@ -63,12 +63,12 @@ export default async function CustomersPage({ searchParams }: PageProps) {
               : "본인에게 배정된 고객 목록입니다."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap max-md:w-full">
           {canDelete && isAdminRole(user) ? <DeleteAllCustomersDialog /> : null}
           {canExport ? (
             <a
               href={`/api/customers/export${preservedQuery ? `?${preservedQuery}` : ""}`}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium hover:bg-accent transition"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium hover:bg-accent transition max-md:flex-1 max-md:justify-center max-md:whitespace-nowrap"
               target="_blank"
               rel="noreferrer"
               title="현재 검색 조건 그대로 엑셀 다운로드"

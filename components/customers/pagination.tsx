@@ -118,16 +118,16 @@ export function Pagination({
 
   return (
     <nav
-      className="flex items-center justify-between gap-3 pt-4 flex-wrap"
+      className="flex items-center justify-between gap-3 pt-4 flex-wrap max-md:flex-col max-md:items-stretch"
       aria-label="페이지 이동"
     >
-      <div className="text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground max-md:w-full">
         총 <span className="font-semibold text-foreground">{total.toLocaleString("ko-KR")}</span>건 · {page} / {totalPages} 페이지
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 max-md:w-full max-md:overflow-x-auto max-md:pb-1">
         {/* 페이지당 표시 개수 — localStorage 영속화 */}
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground max-md:shrink-0 max-md:whitespace-nowrap">
           <span>페이지당</span>
           <Select
             value={String(perPage)}
@@ -147,7 +147,7 @@ export function Pagination({
           <span>건</span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 max-md:shrink-0">
           <Link
             href={buildPageHref(prev)}
             aria-disabled={page <= 1}

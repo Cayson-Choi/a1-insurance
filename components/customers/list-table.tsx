@@ -79,6 +79,7 @@ export function ListTable({
   const { order, widths, setOrder, setMultiWidths, resetAll, hydrated } = useTablePrefs();
 
   const tableRef = useRef<HTMLTableElement | null>(null);
+  const selectionRootRef = useRef<HTMLDivElement | null>(null);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const selectedRef = useRef<Set<string>>(new Set());
   const [selectedCount, setSelectedCount] = useState(0);
@@ -131,23 +132,34 @@ export function ListTable({
     setSelectedCount(selectedRef.current.size);
   }, []);
 
-  const toggleOne = useCallback((id: string, checked: boolean, row?: HTMLTableRowElement | null) => {
+  const toggleOne = useCallback((id: string, checked: boolean, row?: HTMLElement | null) => {
     if (checked) selectedRef.current.add(id);
     else selectedRef.current.delete(id);
-    row?.classList.toggle("bg-brand/40", checked);
-    row?.classList.toggle("hover:bg-brand/50", checked);
+    const root = selectionRootRef.current;
+    if (root) {
+      root.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
+        if (input.value !== id) return;
+        input.checked = checked;
+        const item = input.closest<HTMLElement>("[data-customer-row='true']");
+        item?.classList.toggle("bg-brand/40", checked);
+        item?.classList.toggle("hover:bg-brand/50", checked);
+      });
+    } else {
+      row?.classList.toggle("bg-brand/40", checked);
+      row?.classList.toggle("hover:bg-brand/50", checked);
+    }
     syncSelectionCount();
   }, [syncSelectionCount]);
 
   function toggleAll(checked: boolean) {
     selectedRef.current = checked ? new Set(rows.map((r) => r.id)) : new Set();
-    const table = tableRef.current;
-    if (table) {
-      table.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
+    const root = selectionRootRef.current;
+    if (root) {
+      root.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
         input.checked = checked;
-        const row = input.closest("tr");
-        row?.classList.toggle("bg-brand/40", checked);
-        row?.classList.toggle("hover:bg-brand/50", checked);
+        const item = input.closest<HTMLElement>("[data-customer-row='true']");
+        item?.classList.toggle("bg-brand/40", checked);
+        item?.classList.toggle("hover:bg-brand/50", checked);
       });
     }
     syncSelectionCount();
@@ -175,12 +187,12 @@ export function ListTable({
   useEffect(() => {
     selectedRef.current = new Set();
     queueMicrotask(() => setSelectedCount(0));
-    const table = tableRef.current;
-    if (table) {
-      table.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
+    const root = selectionRootRef.current;
+    if (root) {
+      root.querySelectorAll<HTMLInputElement>("input[data-customer-select='true']").forEach((input) => {
         input.checked = false;
-        const row = input.closest("tr");
-        row?.classList.remove("bg-brand/40", "hover:bg-brand/50");
+        const item = input.closest<HTMLElement>("[data-customer-row='true']");
+        item?.classList.remove("bg-brand/40", "hover:bg-brand/50");
       });
     }
   }, [rows]);
@@ -228,7 +240,7 @@ export function ListTable({
       {/* flex-1 min-h-0 chain — 부모(customers/page) 의 flex-col 안에서 남는 세로 공간을 차지해
           내부 테이블 컨테이너가 viewport 안에서만 스크롤되도록. page-level 스크롤이 사라져
           sticky 헤더가 항상 viewport 상단에 보인다. */}
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div ref={selectionRootRef} className="flex-1 min-h-0 flex flex-col">
       <div className="flex items-center justify-end gap-2 mb-2 text-xs text-muted-foreground shrink-0">
         <span className="hidden md:inline">컬럼 헤더 드래그·우측 가장자리로 폭 조절·헤더 클릭으로 정렬</span>
         <button
@@ -246,7 +258,21 @@ export function ListTable({
       {/* 내부 스크롤 컨테이너 — flex-1 min-h-0 로 부모의 남는 공간을 모두 차지.
           가로 스크롤바가 항상 viewport 하단에 위치하고 컬럼 헤더가 컨테이너 상단에 sticky 로 고정된다.
           한 페이지 행 수가 많아도(500) 헤더와 가로 스크롤이 멀어지지 않는다. */}
-      <div className="flex-1 min-h-0 border bg-card shadow-sm overflow-auto max-md:max-h-[65dvh] max-md:overscroll-contain max-md:rounded-lg">
+      <div className="md:hidden max-h-[65dvh] space-y-2 overflow-auto rounded-lg border bg-card p-2 shadow-sm overscroll-contain">
+        {rows.map((c) => (
+          <MobileCustomerCard
+            key={c.id}
+            customer={c}
+            preservedQuery={preservedQuery}
+            canUnmaskPhone={canUnmaskPhone}
+            canBulkEdit={canBulkEdit}
+            showAgentColumn={showAgentColumn}
+            onToggle={toggleOne}
+          />
+        ))}
+      </div>
+
+      <div className="hidden md:block flex-1 min-h-0 border bg-card shadow-sm overflow-auto">
         {/* id 고정 — @dnd-kit 의 자동 생성 sequential ID 가 SSR/Client 간 다르게 매겨져 hydration mismatch 발생.
             명시적 id 로 양쪽이 동일한 aria-describedby 값을 갖도록 강제. */}
         <DndContext
@@ -255,7 +281,7 @@ export function ListTable({
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
-          <table ref={tableRef} className="w-full text-xs md:text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
+          <table ref={tableRef} className="w-full text-sm border-separate border-spacing-0 table-fixed" style={{ minWidth: 3600 }}>
             <colgroup>
               {canBulkEdit ? <col style={{ width: 40 }} /> : null}
               {visibleIds.map((id) => (
@@ -265,7 +291,7 @@ export function ListTable({
             <thead>
               <tr>
                 {canBulkEdit ? (
-                  <th className="h-9 md:h-10 px-2 md:px-3 text-left align-middle border-b border-r bg-muted md:sticky md:top-0 md:z-20">
+                  <th className="h-10 px-3 text-left align-middle border-b border-r bg-muted sticky top-0 z-20">
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -489,12 +515,12 @@ function SortableHeader({
       style={style}
       className={cn(
         // sticky top-0 + 불투명 bg-muted 로 헤더 고정 — 반투명(bg-muted/50)이면 스크롤되는 행이 비쳐 가독성 ↓
-        "h-9 md:h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted select-none md:sticky md:top-0 md:z-20",
+        "h-10 text-left align-middle border-b border-r last:border-r-0 bg-muted select-none sticky top-0 z-20",
         // 드래그 중에는 다른 sticky th 들 위로 띄움
         isDragging && "z-30",
       )}
     >
-      <div className="flex items-center justify-between gap-1 pl-1.5 pr-1 md:pl-2 group">
+      <div className="flex items-center justify-between gap-1 pl-2 pr-1 group">
         <button
           type="button"
           {...attributes}
@@ -553,16 +579,17 @@ const CustomerRow = memo(function CustomerRow({
   preservedQuery: string;
   canUnmaskPhone: boolean;
   canBulkEdit: boolean;
-  onToggle: (id: string, checked: boolean, row?: HTMLTableRowElement | null) => void;
+  onToggle: (id: string, checked: boolean, row?: HTMLElement | null) => void;
 }) {
   const href = `/customers/${customer.id}${preservedQuery ? `?${preservedQuery}` : ""}`;
 
   return (
-    <tr className="border-b last:border-0 hover:bg-brand/25">
+    <tr data-customer-row="true" className="border-b last:border-0 hover:bg-brand/25">
       {canBulkEdit ? (
-        <td className="px-2 md:px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2 align-middle border-r" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
+            value={customer.id}
             data-customer-select="true"
             onChange={(e) => onToggle(customer.id, e.currentTarget.checked, e.currentTarget.closest("tr"))}
             aria-label={`${customer.name} 선택`}
@@ -583,6 +610,63 @@ const CustomerRow = memo(function CustomerRow({
   );
 });
 
+const MobileCustomerCard = memo(function MobileCustomerCard({
+  customer,
+  preservedQuery,
+  canUnmaskPhone,
+  canBulkEdit,
+  showAgentColumn,
+  onToggle,
+}: {
+  customer: ListedCustomer;
+  preservedQuery: string;
+  canUnmaskPhone: boolean;
+  canBulkEdit: boolean;
+  showAgentColumn: boolean;
+  onToggle: (id: string, checked: boolean, row?: HTMLElement | null) => void;
+}) {
+  const href = `/customers/${customer.id}${preservedQuery ? `?${preservedQuery}` : ""}`;
+  const phone = canUnmaskPhone ? formatPhone(customer.phone1) : maskPhone(customer.phone1);
+  const agent = customer.agentName || customer.agentId;
+  const address = [customer.address, customer.addressDetail].filter(Boolean).join(" ");
+
+  return (
+    <article
+      data-customer-row="true"
+      className="rounded-md border bg-background px-3 py-2.5 transition hover:bg-brand/20"
+    >
+      <div className="flex items-start gap-3">
+        {canBulkEdit ? (
+          <input
+            type="checkbox"
+            value={customer.id}
+            data-customer-select="true"
+            onChange={(e) => onToggle(customer.id, e.currentTarget.checked, e.currentTarget.closest("article"))}
+            aria-label={`${customer.name} 선택`}
+            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+          />
+        ) : null}
+        <Link href={href} className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <span className="truncate text-base font-semibold text-foreground">{customer.name}</span>
+            <CallResultBadge value={customer.callResult} />
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {customer.customerCode ? <span className="tabular-nums">{customer.customerCode}</span> : null}
+            {phone ? <span className="tabular-nums">{phone}</span> : null}
+            {showAgentColumn ? <span>{agent || "미배정"}</span> : null}
+          </div>
+          {address ? (
+            <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+              {address}
+            </div>
+          ) : null}
+        </Link>
+      </div>
+    </article>
+  );
+});
+
 const DataCell = memo(function DataCell({
   columnId,
   customer,
@@ -597,7 +681,7 @@ const DataCell = memo(function DataCell({
   const content = renderCellContent(columnId, customer, canUnmaskPhone);
   const cls = cellClass(columnId);
   return (
-    <td className={cn("px-2 md:px-3 py-2 align-middle truncate border-r last:border-r-0", cls)}>
+    <td className={cn("px-3 py-2 align-middle truncate border-r last:border-r-0", cls)}>
       <Link href={href} className="block truncate" title={typeof content === "string" ? content : undefined}>
         {content}
       </Link>
