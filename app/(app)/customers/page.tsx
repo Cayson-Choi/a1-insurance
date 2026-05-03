@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { Download } from "lucide-react";
 import {
   requireUserWithPerms,
@@ -12,6 +13,7 @@ import { SearchBar } from "@/components/customers/search-bar";
 import { ListTable } from "@/components/customers/list-table";
 import { Pagination } from "@/components/customers/pagination";
 import { DeleteAllCustomersDialog } from "@/components/customers/delete-all-customers-dialog";
+import { RRN_FILTER_COOKIE, parseRrnFilterCookie } from "@/lib/customers/rrn-filter-cookie";
 
 export const metadata: Metadata = {
   title: "고객 목록",
@@ -24,7 +26,9 @@ type PageProps = {
 export default async function CustomersPage({ searchParams }: PageProps) {
   const user = await requireUserWithPerms();
   const params = await searchParams;
-  const filter = parseFilter(params);
+  const cookieStore = await cookies();
+  const rrnFilter = parseRrnFilterCookie(cookieStore.get(RRN_FILTER_COOKIE)?.value);
+  const filter = { ...parseFilter(params), ...rrnFilter };
   // 전체 조회 가능 여부 — admin 과 manager 는 다른 담당자 고객도 보임.
   const canSeeAll = canSeeAllCustomers(user);
   // 담당자 재할당(개별+일괄) 가능 여부 — admin 과 manager.
@@ -43,6 +47,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const preservedQuery = new URLSearchParams(
     Object.fromEntries(
       Object.entries(params).flatMap(([k, v]) => {
+        if (k === "rrnFront" || k === "rrnBack") return [];
         if (v === undefined) return [];
         if (Array.isArray(v)) return v.length ? [[k, v[0]]] : [];
         return [[k, v]];

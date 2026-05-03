@@ -5,12 +5,6 @@ import { CALL_RESULTS, type CallResult } from "@/lib/excel/column-map";
 import { canSeeAllCustomers, type SessionUser } from "@/lib/auth/rbac";
 import { isSortDir, isSortKey, type SortDir, type SortKey } from "@/lib/customers/columns";
 import { getStoredRrnBack, piiHash } from "@/lib/security/pii";
-function isValidRrnFront(s: string): boolean {
-  return /^\d{6}$/.test(s);
-}
-function isValidRrnBack(s: string): boolean {
-  return /^\d{7}$/.test(s);
-}
 
 const ALL_AGENT_FILTER = "__all";
 const UNASSIGNED_AGENT_FILTER = "__unassigned";
@@ -23,6 +17,8 @@ export type CustomerFilter = {
   agentId?: string;
   rrnFront?: string;
   rrnBack?: string;
+  rrnFrontHash?: string;
+  rrnBackHash?: string;
   birthYearFrom?: number;
   birthYearTo?: number;
   sort?: SortKey;
@@ -63,8 +59,6 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
     if (Array.isArray(v)) return v[0];
     return v;
   };
-  const rrnFrontRaw = pick("rrnFront")?.replace(/\D/g, "") ?? "";
-  const rrnBackRaw = pick("rrnBack")?.replace(/\D/g, "") ?? "";
   const phoneRaw = pick("phone")?.replace(/\D/g, "") ?? "";
   const sortRaw = pick("sort");
   const dirRaw = pick("dir");
@@ -74,8 +68,6 @@ export function parseFilter(searchParams: Record<string, string | string[] | und
     phone: phoneRaw || undefined,
     callResult: parseCallResult(pick("callResult")),
     agentId: parseAgentId(pick("agentId")),
-    rrnFront: isValidRrnFront(rrnFrontRaw) ? rrnFrontRaw : undefined,
-    rrnBack: isValidRrnBack(rrnBackRaw) ? rrnBackRaw : undefined,
     birthYearFrom: parseYear(pick("byFrom")),
     birthYearTo: parseYear(pick("byTo")),
     sort: isSortKey(sortRaw) ? sortRaw : undefined,
@@ -197,6 +189,8 @@ export function buildWhere(filter: CustomerFilter, user: SessionUser): SQL | und
   if (filter.callResult) conds.push(eq(customers.callResult, filter.callResult));
   if (filter.rrnFront) conds.push(eq(customers.rrnFrontHash, piiHash(filter.rrnFront)!));
   if (filter.rrnBack) conds.push(eq(customers.rrnBackHash, piiHash(filter.rrnBack)!));
+  if (filter.rrnFrontHash) conds.push(eq(customers.rrnFrontHash, filter.rrnFrontHash));
+  if (filter.rrnBackHash) conds.push(eq(customers.rrnBackHash, filter.rrnBackHash));
   if (filter.birthYearFrom !== undefined) {
     conds.push(sql`extract(year from ${customers.birthDate}) >= ${filter.birthYearFrom}`);
   }

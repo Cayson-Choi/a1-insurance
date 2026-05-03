@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Edit3, KeyRound, LogOut, Shield, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -26,6 +28,15 @@ export function UserTable({
   rows: UserRow[];
   currentAgentId: string;
 }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      router.refresh();
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [router]);
+
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
       <Table className="min-w-[960px]">

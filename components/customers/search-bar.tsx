@@ -34,13 +34,14 @@ export function SearchBar({
   const [phone, setPhone] = useState<string>(sp.get("phone") ?? "");
   const [callResult, setCallResult] = useState<string>(sp.get("callResult") ?? "");
   const [agentId, setAgentId] = useState<string>(sp.get("agentId") ?? "");
-  const [rrnFront, setRrnFront] = useState<string>(sp.get("rrnFront") ?? "");
-  const [rrnBack, setRrnBack] = useState<string>(sp.get("rrnBack") ?? "");
+  const [rrnFront, setRrnFront] = useState<string>("");
+  const [rrnBack, setRrnBack] = useState<string>("");
   const [byFrom, setByFrom] = useState<string>(sp.get("byFrom") ?? "");
   const [byTo, setByTo] = useState<string>(sp.get("byTo") ?? "");
 
   const firstRenderRef = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rrnFilterKeyRef = useRef("|");
   // sp 를 commit useCallback deps 에 직접 넣으면 router.push → URL 변경 → sp 갱신 →
   // commit 재생성 → useEffect 재발화 → router.push … 무한 루프. ref 로 분리.
   const spRef = useRef(sp);
@@ -57,6 +58,11 @@ export function SearchBar({
       const ph = phone.replace(/\D/g, "");
       const rf = rrnFront.replace(/\D/g, "").slice(0, 6);
       const rb = rrnBack.replace(/\D/g, "").slice(0, 7);
+      const validRrnFront = rf.length === 6 ? rf : "";
+      const validRrnBack = rb.length === 7 ? rb : "";
+      const rrnFilterKey = `${validRrnFront}|${validRrnBack}`;
+      const legacyUrlHasRrn = !!sp?.get("rrnFront") || !!sp?.get("rrnBack");
+      const rrnChanged = rrnFilterKey !== rrnFilterKeyRef.current || legacyUrlHasRrn;
       const yf = byFrom.replace(/\D/g, "").slice(0, 4);
       const yt = byTo.replace(/\D/g, "").slice(0, 4);
 
@@ -69,8 +75,7 @@ export function SearchBar({
         eq(ph, sp?.get("phone") ?? null) &&
         eq(callResult, sp?.get("callResult") ?? null) &&
         eq(agentId, sp?.get("agentId") ?? null) &&
-        eq(rf.length === 6 ? rf : "", sp?.get("rrnFront") ?? null) &&
-        eq(rb.length === 7 ? rb : "", sp?.get("rrnBack") ?? null) &&
+        !rrnChanged &&
         eq(yf.length === 4 ? yf : "", sp?.get("byFrom") ?? null) &&
         eq(yt.length === 4 ? yt : "", sp?.get("byTo") ?? null);
       if (noChange) return;
@@ -86,17 +91,30 @@ export function SearchBar({
       setOrDel("phone", ph || undefined);
       setOrDel("callResult", callResult || undefined);
       setOrDel("agentId", agentId || undefined);
-      setOrDel("rrnFront", rf.length === 6 ? rf : undefined);
-      setOrDel("rrnBack", rb.length === 7 ? rb : undefined);
+      next.delete("rrnFront");
+      next.delete("rrnBack");
       setOrDel("byFrom", yf.length === 4 ? yf : undefined);
       setOrDel("byTo", yt.length === 4 ? yt : undefined);
       // 검색 조건이 바뀌면 결과 셋이 달라지므로 page 는 1 로 리셋 (정렬 변경 시와 동일 관행).
       next.delete("page");
       const qs = next.toString();
 
+      const syncRrnFilter = async () => {
+        if (!rrnChanged) return;
+        const res = await fetch("/api/customers/rrn-filter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rrnFront: validRrnFront, rrnBack: validRrnBack }),
+        });
+        if (!res.ok) throw new Error("Failed to sync RRN filter");
+        rrnFilterKeyRef.current = rrnFilterKey;
+      };
+
       const run = () => {
-        startTransition(() => {
-          router.push(`/customers${qs ? `?${qs}` : ""}`);
+        void syncRrnFilter().finally(() => {
+          startTransition(() => {
+            router.push(`/customers${qs ? `?${qs}` : ""}`);
+          });
         });
       };
 
@@ -133,6 +151,7 @@ export function SearchBar({
     setAgentId("");
     setRrnFront("");
     setRrnBack("");
+    rrnFilterKeyRef.current = "|";
     setByFrom("");
     setByTo("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -153,8 +172,14 @@ export function SearchBar({
       next.delete(k);
     }
     const qs = next.toString();
-    startTransition(() => {
-      router.push(`/customers${qs ? `?${qs}` : ""}`);
+    void fetch("/api/customers/rrn-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rrnFront: "", rrnBack: "" }),
+    }).finally(() => {
+      startTransition(() => {
+        router.push(`/customers${qs ? `?${qs}` : ""}`);
+      });
     });
   }
 
