@@ -15,7 +15,7 @@ const agentDefaults = {
 
 const SEED_USERS: Array<Omit<NewUser, "passwordHash"> & { password: string }> = [
   {
-    agentId: "admin",
+    agentId: "admin2020",
     password: "admin1234",
     name: "관리자",
     role: "admin",
@@ -56,7 +56,7 @@ async function main() {
   }
 
   console.log("\n[시드 완료] 로그인 정보:");
-  console.log("  관리자:  admin / admin1234");
+  console.log("  관리자:  admin2020 / admin1234");
   console.log("  담당자:  a00003, a00005, a00006, a00007, a00012, a00014, a44643 / agent1234");
   console.log("\n⚠ 실제 배포 전 반드시 비밀번호를 변경하세요.");
 

@@ -226,7 +226,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             where: eq(users.agentId, agentId),
             columns: { sessionsInvalidatedAt: true },
           });
-          if (row?.sessionsInvalidatedAt) {
+          if (!row) {
+            return { ...session, user: undefined as unknown as typeof session.user };
+          }
+          if (row.sessionsInvalidatedAt) {
             const invalidatedAtSec = Math.floor(
               row.sessionsInvalidatedAt.getTime() / 1000,
             );
