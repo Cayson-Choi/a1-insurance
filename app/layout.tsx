@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   },
   description: DESCRIPTION,
   applicationName: "DB-CRM",
+  icons: {
+    icon: [{ url: "/brand/db-crm-logo.png", type: "image/png" }],
+    shortcut: [{ url: "/brand/db-crm-logo.png", type: "image/png" }],
+    apple: [{ url: "/brand/db-crm-logo.png", type: "image/png" }],
+  },
   robots: { index: false, follow: false },
   openGraph: {
     type: "website",
