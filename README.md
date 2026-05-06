@@ -23,14 +23,16 @@
 
 ## 보안 구조
 
+- `proxy.ts`에서 Auth.js 중앙 인증 가드를 적용합니다. 모든 비공개 라우트는 프록시 레벨에서 인증 검사됩니다.
 - 고객 주민번호 앞자리는 HMAC 해시로 검색하고, 뒷자리는 AES-256-GCM으로 암호화 저장합니다.
 - 원문 주민번호 컬럼은 migration `0013_drop_plaintext_rrn.sql` 이후 제거됩니다.
 - `PII_ENC_KEY`, `PII_HMAC_KEY`는 Vercel Production에서 Sensitive 환경변수로 등록해야 합니다.
 - 고객 목록/상세/일괄 작업은 서버에서 RBAC를 다시 검사합니다. UI 권한만 믿지 않습니다.
 - 엑셀 업로드는 `.xlsx` 확장자, MIME allowlist, ZIP 시그니처, 최대 용량, 최대 행 수를 검사합니다.
-- import/export/detail API에는 no-store 보안 헤더와 사용자+IP 기준 rate limit을 적용합니다.
+- import/export/detail API에는 no-store 보안 헤더, same-origin 검사, 사용자+IP 기준 rate limit을 적용합니다.
+- 엑셀 export 실행은 감사 로그에 기록됩니다.
 - 로그인 실패는 agentId와 IP 기준으로 누적 제한합니다.
-- 주요 보안 헤더는 `next.config.ts`에서 설정합니다.
+- 주요 보안 헤더(CSP, HSTS, X-Frame-Options, Permissions-Policy)는 `next.config.ts`에서 설정합니다.
 
 ## 성능 구조
 
@@ -38,7 +40,7 @@
 - 고객 목록 정렬/검색을 위해 migration `0014_perf_security_indexes.sql`에서 복합 인덱스와 trigram 인덱스를 추가합니다.
 - 이름/주소/전화번호 substring 검색은 PostgreSQL `pg_trgm` 인덱스를 사용합니다.
 - 고객 import는 기존 고객 매칭에 필요한 최소 컬럼만 조회하고, 신규 고객은 500건 단위로 batch insert합니다.
-- 누락 담당자 자동 생성 계정은 `agent` 역할, 최초 비밀번호 `123456`, 기본 권한 모두 꺼짐 상태로 생성됩니다.
+- 누락 담당자 자동 생성 계정은 `agent` 역할, CSPRNG 랜덤 비밀번호, 기본 권한 모두 꺼짐 상태로 생성됩니다. 관리자가 비밀번호를 리셋해야 로그인 가능합니다.
 - export는 엑셀에 필요한 컬럼만 조회하며 최대 50,000건으로 제한합니다.
 - 500건 선택/해제는 React state로 500개 row를 모두 재렌더링하지 않도록 DOM checkbox 동기화 방식으로 처리합니다.
 
@@ -115,6 +117,8 @@ pnpm db:import-xlsx   # 로컬 엑셀 import 스크립트
 ## 주요 디렉터리
 
 ```text
+proxy.ts                           중앙 인증 가드 (Next.js 16 proxy)
+
 app/
   (auth)/login/                  로그인
   (app)/customers/               고객 목록/상세

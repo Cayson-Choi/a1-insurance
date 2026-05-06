@@ -1,4 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import { randomBytes } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, auditLogs, users } from "@/lib/db/schema";
@@ -38,7 +39,13 @@ import {
 const MAX_IMPORT_ROWS = 50_000;
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
-const AUTO_CREATED_AGENT_PASSWORD = "123456";
+// 자동 생성 계정은 랜덤 비밀번호 → 관리자가 직접 비밀번호를 리셋해야만 로그인 가능.
+// 고정 비밀번호("123456") 사용 시 제3자가 즉시 로그인 가능한 심각한 보안 위험.
+function generateRandomPassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
+  const bytes = randomBytes(24);
+  return Array.from(bytes, (b: number) => chars[b % chars.length]).join("");
+}
 const AGENT_ID_RE = /^[a-zA-Z0-9_-]{2,20}$/;
 
 type ExistingCustomerMatch = Pick<
@@ -456,7 +463,8 @@ export async function POST(req: NextRequest) {
   try {
     await db.transaction(async (tx) => {
       if (missingAgents.size > 0) {
-        const passwordHash = await hashPassword(AUTO_CREATED_AGENT_PASSWORD);
+        const randomPw = generateRandomPassword();
+        const passwordHash = await hashPassword(randomPw);
         const createdAgents = await tx
           .insert(users)
           .values(
@@ -494,7 +502,7 @@ export async function POST(req: NextRequest) {
                 name: agent.name,
                 role: agent.role,
                 source: "excel_import",
-                initialPassword: "default_123456",
+                initialPassword: "[RANDOM — 관리자 비밀번호 리셋 필요]",
                 canCreate: false,
                 canEdit: false,
                 canDelete: false,
