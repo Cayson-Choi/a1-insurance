@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PER_PAGE_OPTIONS, DEFAULT_PER_PAGE } from "@/lib/customers/page-config";
 import {
@@ -148,9 +148,25 @@ export function Pagination({
         </div>
 
         <div className="flex items-center gap-1 max-md:shrink-0">
+          {/* 첫 페이지로 점프 — page=1 일 때 비활성 */}
+          <Link
+            href={buildPageHref(1)}
+            aria-disabled={page <= 1}
+            aria-label="첫 페이지"
+            title="첫 페이지"
+            tabIndex={page <= 1 ? -1 : 0}
+            className={cn(
+              "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm hover:bg-accent",
+              page <= 1 && "pointer-events-none opacity-40",
+            )}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Link>
           <Link
             href={buildPageHref(prev)}
             aria-disabled={page <= 1}
+            aria-label="이전 페이지"
+            title="이전 페이지"
             tabIndex={page <= 1 ? -1 : 0}
             className={cn(
               "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm hover:bg-accent",
@@ -174,6 +190,8 @@ export function Pagination({
           <Link
             href={buildPageHref(next)}
             aria-disabled={page >= totalPages}
+            aria-label="다음 페이지"
+            title="다음 페이지"
             tabIndex={page >= totalPages ? -1 : 0}
             className={cn(
               "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm hover:bg-accent",
@@ -181,6 +199,20 @@ export function Pagination({
             )}
           >
             <ChevronRight className="h-4 w-4" />
+          </Link>
+          {/* 마지막 페이지로 점프 — 마지막 페이지일 때 비활성 */}
+          <Link
+            href={buildPageHref(totalPages)}
+            aria-disabled={page >= totalPages}
+            aria-label="마지막 페이지"
+            title="마지막 페이지"
+            tabIndex={page >= totalPages ? -1 : 0}
+            className={cn(
+              "inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm hover:bg-accent",
+              page >= totalPages && "pointer-events-none opacity-40",
+            )}
+          >
+            <ChevronsRight className="h-4 w-4" />
           </Link>
         </div>
       </div>
